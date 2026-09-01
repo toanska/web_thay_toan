@@ -1,0 +1,6 @@
+{
+  "name": "Cổng Thông Tin & Khảo Thí Trực Tuyến THCS",
+  "description": "Hệ thống quản trị tin tức trường học, ngân hàng câu hỏi chuẩn GDPT 2018, tổ chức thi trực tuyến chuyên nghiệp và báo cáo phân tích kết quả chi tiết cho giáo viên và học sinh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

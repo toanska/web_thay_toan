@@ -1,0 +1,386 @@
+import React, { useState } from 'react';
+import { 
+  GraduationCap, 
+  Newspaper, 
+  BookOpen,
+  FileText, 
+  Database, 
+  BarChart3, 
+  UserCheck, 
+  Bell, 
+  RotateCcw, 
+  Download, 
+  Upload, 
+  Menu, 
+  X,
+  Award,
+  CheckCircle2,
+  LogIn,
+  Search,
+  Key,
+  Laptop,
+  Users,
+  UserPlus,
+  CloudLightning
+} from 'lucide-react';
+import { User, NotificationItem, NavigationTab } from '../types';
+import { isTeacherToanOrAdmin } from '../utils/authUtils';
+
+interface HeaderProps {
+  activeTab: NavigationTab;
+  setActiveTab: (tab: NavigationTab) => void;
+  currentUser: User;
+  users: User[];
+  onSwitchUser: (user: User) => void;
+  notifications: NotificationItem[];
+  onMarkNotificationRead: (id: string) => void;
+  onResetData: () => void;
+  onExportData: () => void;
+  onImportData: (json: string) => void;
+  onOpenCloudflareSync?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  setActiveTab,
+  currentUser,
+  users,
+  onSwitchUser,
+  notifications,
+  onMarkNotificationRead,
+  onResetData,
+  onExportData,
+  onImportData,
+  onOpenCloudflareSync
+}) => {
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+
+  const unreadNotifs = notifications.filter(n => !n.read);
+  const isAuthorizedToManageStudents = isTeacherToanOrAdmin(currentUser);
+
+  const allNavItems: { id: NavigationTab; label: string; icon: any; color: string; badge?: string }[] = [
+    { id: 'news', label: 'Tin tức & Thông báo', icon: Newspaper, color: 'text-sky-600' },
+    { id: 'materials', label: 'Bài giảng & Giáo án', icon: BookOpen, color: 'text-teal-600', badge: 'Mới' },
+    { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
+    { id: 'score_lookup', label: 'Tra cứu điểm (ID Học sinh)', icon: Search, color: 'text-amber-600' },
+    { id: 'students', label: 'Quản lý tài khoản', icon: Users, color: 'text-emerald-600', badge: 'Admin' },
+    { id: 'reports', label: 'Báo cáo & Phổ điểm', icon: BarChart3, color: 'text-purple-600' },
+    { id: 'login', label: 'Đăng nhập / Phân quyền', icon: Key, color: 'text-blue-600' },
+  ];
+
+  const navItems = allNavItems.filter(item => item.id !== 'students' || isAuthorizedToManageStudents);
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        onImportData(content);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
+      {/* Top Banner / School Branding */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 text-white px-4 py-2 sm:px-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 backdrop-blur-xs flex items-center justify-center border border-blue-400/30 shadow-inner">
+              <Laptop className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-serif flex items-center gap-2">
+                Môn Tin học - Thầy Toàn
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 sm:space-x-4 text-xs">
+            {/* Quick Role Switcher */}
+            <div className="relative">
+              <button
+                onClick={() => { setShowUserMenu(!showUserMenu); setShowNotifMenu(false); setShowSettingsMenu(false); }}
+                className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all cursor-pointer text-left"
+              >
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-6 h-6 rounded-full object-cover border border-white/40"
+                />
+                <div className="hidden sm:block">
+                  <div className="font-semibold leading-tight text-white flex items-center gap-1">
+                    {currentUser.name}
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-sm bg-amber-400 text-slate-900 font-bold uppercase">
+                      {currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-blue-200">
+                    {currentUser.className ? `Lớp ${currentUser.className}` : currentUser.code}
+                  </div>
+                </div>
+                <UserCheck className="w-3.5 h-3.5 text-blue-300" />
+              </button>
+
+              {/* User Dropdown Menu */}
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 text-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-4 py-2 border-b border-slate-100">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Chuyển đổi vai trò người dùng</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Trải nghiệm giao diện theo các góc nhìn khác nhau</p>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto py-1">
+                    {users.map(u => (
+                      <button
+                        key={u.id}
+                        onClick={() => {
+                          onSwitchUser(u);
+                          setShowUserMenu(false);
+                        }}
+                        className={`w-full px-4 py-2.5 flex items-center space-x-3 text-left hover:bg-slate-50 transition-colors ${
+                          u.id === currentUser.id ? 'bg-blue-50/80 font-medium' : ''
+                        }`}
+                      >
+                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-slate-900 truncate flex items-center justify-between">
+                            {u.name}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                              u.role === 'student' ? 'bg-sky-100 text-sky-700' :
+                              u.role === 'teacher' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {u.role === 'student' ? 'Học sinh' : u.role === 'teacher' ? 'Giáo viên' : 'Admin'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {u.className ? `Lớp ${u.className} • ${u.code}` : u.code}
+                          </div>
+                        </div>
+                        {u.id === currentUser.id && (
+                          <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  {isAuthorizedToManageStudents && (
+                    <div className="p-2 border-t border-slate-100 bg-slate-50">
+                      <button
+                        onClick={() => {
+                          setActiveTab('students');
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>+ Quản trị & Tạo tài khoản</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => { setShowNotifMenu(!showNotifMenu); setShowUserMenu(false); setShowSettingsMenu(false); }}
+                className="relative p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white"
+                title="Thông báo hệ thống"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadNotifs.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-[10px] font-bold flex items-center justify-center text-white ring-2 ring-blue-900 animate-pulse">
+                    {unreadNotifs.length}
+                  </span>
+                )}
+              </button>
+
+              {showNotifMenu && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 text-slate-800 z-50">
+                  <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Thông báo mới ({unreadNotifs.length})</span>
+                    <span className="text-[11px] text-blue-600">Trực tuyến</span>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                    {notifications.length === 0 ? (
+                      <p className="p-4 text-center text-xs text-slate-400">Không có thông báo nào</p>
+                    ) : (
+                      notifications.map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => onMarkNotificationRead(n.id)}
+                          className={`p-3 text-xs hover:bg-slate-50 cursor-pointer transition-colors ${
+                            !n.read ? 'bg-blue-50/50 font-medium' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-slate-900 font-semibold mb-1">
+                            <span>{n.title}</span>
+                            <span className="text-[10px] text-slate-400 font-normal">{n.timestamp}</span>
+                          </div>
+                          <p className="text-slate-600 line-clamp-2 text-[11px]">{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Cloudflare Cloud Storage button */}
+            {onOpenCloudflareSync && (
+              <button
+                onClick={onOpenCloudflareSync}
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/40 text-orange-200 hover:text-white transition-all cursor-pointer shadow-2xs"
+                title="Lưu trữ & Đồng bộ Cloudflare Đám mây (Miễn phí)"
+              >
+                <CloudLightning className="w-4 h-4 text-orange-400" />
+                <span className="hidden sm:inline font-semibold text-xs text-orange-100">Cloudflare</span>
+              </button>
+            )}
+
+            {/* Quick Data Backup / Reset Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => { setShowSettingsMenu(!showSettingsMenu); setShowUserMenu(false); setShowNotifMenu(false); }}
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white"
+                title="Quản lý dữ liệu hệ thống"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+
+              {showSettingsMenu && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 text-slate-800 z-50">
+                  <div className="px-4 py-2 border-b border-slate-100">
+                    <p className="text-xs font-bold text-slate-800">Dữ liệu & Khôi phục</p>
+                    <p className="text-[11px] text-slate-500">Sao lưu hoặc nạp lại dữ liệu mẫu</p>
+                  </div>
+                  <div className="p-2 space-y-1">
+                    {onOpenCloudflareSync && (
+                      <button
+                        onClick={() => { onOpenCloudflareSync(); setShowSettingsMenu(false); }}
+                        className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-orange-50 flex items-center space-x-2 text-orange-800 font-medium"
+                      >
+                        <CloudLightning className="w-4 h-4 text-orange-600" />
+                        <span>Đồng bộ Cloudflare KV (Cloud)</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => { onExportData(); setShowSettingsMenu(false); }}
+                      className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-slate-100 flex items-center space-x-2 text-slate-700"
+                    >
+                      <Download className="w-4 h-4 text-blue-600" />
+                      <span>Xuất sao lưu (JSON)</span>
+                    </button>
+
+                    <label className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-slate-100 flex items-center space-x-2 text-slate-700 cursor-pointer">
+                      <Upload className="w-4 h-4 text-emerald-600" />
+                      <span>Nhập dữ liệu (JSON)</span>
+                      <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+                    </label>
+
+                    <button
+                      onClick={() => {
+                        if (confirm('Bạn có chắc chắn muốn khôi phục toàn bộ bài kiểm tra, tin tức và câu hỏi về trạng thái mẫu ban đầu?')) {
+                          onResetData();
+                          setShowSettingsMenu(false);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-rose-50 flex items-center space-x-2 text-rose-600"
+                    >
+                      <RotateCcw className="w-4 h-4 text-rose-600" />
+                      <span>Khôi phục dữ liệu mẫu gốc</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Navigation Bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-14">
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
+            {navItems.map(item => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* School Motto / Academic Year Tag */}
+          <div className="hidden lg:flex items-center space-x-3 text-xs text-slate-500 font-medium">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+              Học kỳ II (2025 - 2026)
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-600 italic">"Tận tâm - Trí tuệ - Khát vọng"</span>
+          </div>
+
+          {/* Mobile menu button */}
+          <div className="flex md:hidden items-center justify-between w-full">
+            <span className="text-sm font-bold text-slate-800">
+              {navItems.find(i => i.id === activeTab)?.label}
+            </span>
+            <button
+              onClick={() => setShowMobileNav(!showMobileNav)}
+              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            >
+              {showMobileNav ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Navigation Dropdown */}
+        {showMobileNav && (
+          <div className="md:hidden py-3 border-t border-slate-200 space-y-1">
+            {navItems.map(item => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setShowMobileNav(false);
+                  }}
+                  className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-medium ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-700 font-bold'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </header>
+  );
+};
