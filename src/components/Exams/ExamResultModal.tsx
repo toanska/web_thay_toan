@@ -15,11 +15,12 @@ import {
   Share2,
   Calendar
 } from 'lucide-react';
-import { Exam, ExamAttempt, Question } from '../../types';
+import { Exam, ExamAttempt, Question, User } from '../../types';
 
 interface ExamResultModalProps {
   attempt: ExamAttempt;
   exam?: Exam | null;
+  currentUser?: User;
   onClose: () => void;
   onRetake?: () => void;
 }
@@ -27,9 +28,12 @@ interface ExamResultModalProps {
 export const ExamResultModal: React.FC<ExamResultModalProps> = ({
   attempt,
   exam,
+  currentUser,
   onClose,
   onRetake
 }) => {
+  const isStudent = currentUser?.role === 'student';
+  const showDetailedAnswers = !isStudent;
   useEffect(() => {
     if (attempt.score >= 8.0) {
       try {
@@ -240,15 +244,17 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                           } else {
                             isStudentSelected = result.studentAnswer === optIdx;
                           }
-                          const isCorrectOption = correctAnswers.includes(optIdx);
+                          const isCorrectOption = showDetailedAnswers && correctAnswers.includes(optIdx);
                           const letter = String.fromCharCode(65 + optIdx);
 
                           let style = 'border-slate-200 bg-white text-slate-700';
                           if (isCorrectOption) {
                             style = 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold';
                           }
-                          if (isStudentSelected && !isCorrectOption) {
+                          if (isStudentSelected && !isCorrectOption && showDetailedAnswers) {
                             style = 'border-rose-400 bg-rose-50 text-rose-900 line-through';
+                          } else if (isStudentSelected && !isCorrectOption && !showDetailedAnswers) {
+                            style = 'border-blue-300 bg-blue-50/50 text-slate-800';
                           }
 
                           return (
@@ -280,7 +286,7 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                           <span className="text-slate-400 block text-[11px]">Câu trả lời của học sinh:</span>
                           <strong className="text-slate-800">{String(result.studentAnswer ?? '(Chưa trả lời)')}</strong>
                         </div>
-                        {correctAnswers && correctAnswers.length > 0 && (
+                        {showDetailedAnswers && correctAnswers && correctAnswers.length > 0 && (
                           <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900">
                             <span className="text-emerald-700 block text-[11px] font-semibold">Đáp án chuẩn / Hướng dẫn chấm:</span>
                             <strong>{correctAnswers.join(' hoặc ')}</strong>
@@ -290,7 +296,7 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                     )}
 
                     {/* Teacher Explanation */}
-                    {explanation && (
+                    {showDetailedAnswers && explanation && (
                       <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1">
                         <p className="font-bold flex items-center gap-1">
                           <HelpCircle className="w-3.5 h-3.5 text-blue-600" />

@@ -689,6 +689,7 @@ export function App() {
         <ExamResultModal
           attempt={viewingAttempt}
           exam={exams.find(e => e.id === viewingAttempt.examId)}
+          currentUser={currentUser}
           onClose={() => setViewingAttempt(null)}
           onRetake={() => {
             const targetExam = exams.find(e => e.id === viewingAttempt.examId);
