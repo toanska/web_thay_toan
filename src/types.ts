@@ -183,6 +183,7 @@ export type NavigationTab =
   | 'materials'
   | 'exams' 
   | 'score_lookup' 
+  | 'admin_portal'
   | 'students'
   | 'login' 
   | 'reports' 

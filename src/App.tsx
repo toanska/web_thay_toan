@@ -15,6 +15,7 @@ import { StudentDashboard } from './components/StudentProfile/StudentDashboard';
 import { ScoreLookupView } from './components/ScoreLookup/ScoreLookupView';
 import { LoginPage } from './components/Auth/LoginPage';
 import { AccountManagementView } from './components/AccountManager/AccountManagementView';
+import { AdminDashboardView } from './components/Admin/AdminDashboardView';
 import { MaterialListView } from './components/Materials/MaterialListView';
 import { CloudflareSyncModal } from './components/CloudflareSync/CloudflareSyncModal';
 import { isTeacherToanOrAdmin } from './utils/authUtils';
@@ -352,6 +353,34 @@ export function App() {
             onViewAttempt={(att) => setViewingAttempt(att)}
             onTakeExam={handleStartExam}
             onNavigateToLogin={() => setActiveTab('login')}
+          />
+        )}
+
+        {/* CHỨC NĂNG 3.5: Trang Quản Trị Toàn Diện (Dành cho Admin hoặc Thầy Toàn) */}
+        {activeTab === 'admin_portal' && (
+          <AdminDashboardView
+            currentUser={currentUser}
+            users={availableUsers}
+            news={news}
+            materials={materials}
+            exams={exams}
+            attempts={attempts}
+            questions={questions}
+            onSaveUser={handleSaveUser}
+            onDeleteUser={handleDeleteUser}
+            onOpenCreateNews={() => setEditingNews(null)}
+            onEditNews={(art) => setEditingNews(art)}
+            onDeleteNews={handleDeleteNews}
+            onSelectNews={(art) => setSelectedNews(art)}
+            onOpenCreateExam={() => setEditingExam(null)}
+            onEditExam={(ex) => setEditingExam(ex)}
+            onDeleteExam={handleDeleteExam}
+            onOpenCreateQuestion={() => setEditingQuestion(null)}
+            onEditQuestion={(q) => setEditingQuestion(q)}
+            onDeleteQuestion={handleDeleteQuestion}
+            onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
+            onViewAttempt={(att) => setViewingAttempt(att)}
+            onNavigateToTab={(tab) => setActiveTab(tab)}
           />
         )}
 

@@ -16,12 +16,14 @@ import {
   Award,
   CheckCircle2,
   LogIn,
+  LogOut,
   Search,
   Key,
   Laptop,
   Users,
   UserPlus,
-  CloudLightning
+  CloudLightning,
+  ShieldCheck
 } from 'lucide-react';
 import { User, NotificationItem, NavigationTab } from '../types';
 import { isTeacherToanOrAdmin } from '../utils/authUtils';
@@ -66,12 +68,18 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'materials', label: 'Bài giảng & Giáo án', icon: BookOpen, color: 'text-teal-600', badge: 'Mới' },
     { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
     { id: 'score_lookup', label: 'Tra cứu điểm (ID Học sinh)', icon: Search, color: 'text-amber-600' },
+    { id: 'admin_portal', label: 'Trang Quản Trị Tổng Hợp', icon: ShieldCheck, color: 'text-rose-600', badge: 'VIP' },
     { id: 'students', label: 'Quản lý tài khoản', icon: Users, color: 'text-emerald-600', badge: 'Admin' },
     { id: 'reports', label: 'Báo cáo & Phổ điểm', icon: BarChart3, color: 'text-purple-600' },
     { id: 'login', label: 'Đăng nhập / Phân quyền', icon: Key, color: 'text-blue-600' },
   ];
 
-  const navItems = allNavItems.filter(item => item.id !== 'students' || isAuthorizedToManageStudents);
+  const navItems = allNavItems.filter(item => {
+    if (item.id === 'admin_portal' || item.id === 'students') {
+      return isAuthorizedToManageStudents;
+    }
+    return true;
+  });
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -130,58 +138,58 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* User Dropdown Menu */}
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 text-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-4 py-2 border-b border-slate-100">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Chuyển đổi vai trò người dùng</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Trải nghiệm giao diện theo các góc nhìn khác nhau</p>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto py-1">
-                    {users.map(u => (
-                      <button
-                        key={u.id}
-                        onClick={() => {
-                          onSwitchUser(u);
-                          setShowUserMenu(false);
-                        }}
-                        className={`w-full px-4 py-2.5 flex items-center space-x-3 text-left hover:bg-slate-50 transition-colors ${
-                          u.id === currentUser.id ? 'bg-blue-50/80 font-medium' : ''
-                        }`}
-                      >
-                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-semibold text-slate-900 truncate flex items-center justify-between">
-                            {u.name}
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
-                              u.role === 'student' ? 'bg-sky-100 text-sky-700' :
-                              u.role === 'teacher' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'
-                            }`}>
-                              {u.role === 'student' ? 'Học sinh' : u.role === 'teacher' ? 'Giáo viên' : 'Admin'}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {u.className ? `Lớp ${u.className} • ${u.code}` : u.code}
-                          </div>
-                        </div>
-                        {u.id === currentUser.id && (
-                          <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  {isAuthorizedToManageStudents && (
-                    <div className="p-2 border-t border-slate-100 bg-slate-50">
-                      <button
-                        onClick={() => {
-                          setActiveTab('students');
-                          setShowUserMenu(false);
-                        }}
-                        className="w-full py-1.5 px-3 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>+ Quản trị & Tạo tài khoản</span>
-                      </button>
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 py-3 text-slate-800 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-4 pb-3 border-b border-slate-100 flex items-center space-x-3">
+                    <img src={currentUser.avatar} alt={currentUser.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</h4>
+                      <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+                      <span className={`inline-block mt-0.5 text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase ${
+                        currentUser.role === 'student' ? 'bg-sky-100 text-sky-700' :
+                        currentUser.role === 'teacher' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
+                      </span>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="p-2 space-y-1">
+                    <button
+                      onClick={() => {
+                        setActiveTab('login');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <LogIn className="w-4 h-4 text-blue-600" />
+                      <span>Đăng nhập tài khoản khác</span>
+                    </button>
+
+                    {isAuthorizedToManageStudents && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setActiveTab('admin_portal');
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-rose-50 hover:text-rose-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <ShieldCheck className="w-4 h-4 text-rose-600" />
+                          <span>Trang Quản Trị Tổng Hợp</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveTab('students');
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <UserPlus className="w-4 h-4 text-emerald-600" />
+                          <span>Quản lý tài khoản</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

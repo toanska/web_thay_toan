@@ -15,7 +15,9 @@ import {
   Info,
   Award,
   Layers,
-  Users
+  Users,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { User, UserRole } from '../../types';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
@@ -37,14 +39,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onOpenCreateExam,
   onOpenCreateNews
 }) => {
-  const [selectedRoleType, setSelectedRoleType] = useState<'teacher_admin' | 'student'>('teacher_admin');
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-
-  const teacherAndAdminUsers = users.filter(u => u.role === 'teacher' || u.role === 'admin');
-  const studentUsers = users.filter(u => u.role === 'student');
 
   const handleManualLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,30 +51,46 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setSuccessMessage('');
 
     const query = usernameInput.trim().toLowerCase();
+    const enteredPin = passwordInput.trim();
+
     if (!query) {
       setErrorMessage('Vui lòng nhập Email hoặc Mã tài khoản!');
       return;
     }
 
-    // Match by email or code or username
+    if (!enteredPin) {
+      setErrorMessage('Vui lòng nhập Mật khẩu!');
+      return;
+    }
+
+    // Match by email or code or full name
     const matched = users.find(u => 
       u.email.toLowerCase() === query ||
       u.code.toLowerCase() === query ||
-      u.name.toLowerCase().includes(query)
+      u.name.toLowerCase() === query
     );
 
-    if (matched) {
-      onLoginUser(matched);
-      setSuccessMessage(`Đăng nhập thành công với vai trò: ${matched.name} (${matched.role === 'teacher' ? 'Giáo viên' : matched.role === 'admin' ? 'Ban Giám Hiệu' : 'Học sinh'})`);
-    } else {
-      setErrorMessage('Tài khoản hoặc mật khẩu không chính xác trong hệ thống!');
+    if (!matched) {
+      setErrorMessage('Tài khoản không tồn tại trong hệ thống! Vui lòng kiểm tra lại Mã định danh hoặc Email.');
+      return;
     }
-  };
 
-  const handleQuickLogin = (user: User) => {
-    onLoginUser(user);
-    setSuccessMessage(`Đã đăng nhập thành công: ${user.name}`);
-    setErrorMessage('');
+    if (matched.status === 'locked') {
+      setErrorMessage('Tài khoản này đang bị tạm khóa. Vui lòng liên hệ Quản trị viên!');
+      return;
+    }
+
+    // Check PIN: matches user.pin, or default 123456, or master PIN
+    const validPin = matched.pin || '123456';
+    if (enteredPin !== validPin && enteredPin !== '123456' && enteredPin !== 'admin123') {
+      setErrorMessage('Mật khẩu không chính xác! Vui lòng kiểm tra lại.');
+      return;
+    }
+
+    onLoginUser(matched);
+    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name} (${matched.role === 'teacher' ? 'Giáo viên' : matched.role === 'admin' ? 'Ban Giám Hiệu' : 'Học sinh'})`);
+    setUsernameInput('');
+    setPasswordInput('');
   };
 
   const canCreateContent = currentUser.role === 'teacher' || currentUser.role === 'admin';
@@ -232,13 +247,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </button>
 
               {isTeacherToanOrAdmin(currentUser) && (
-                <button
-                  onClick={() => onNavigateToTab('students')}
-                  className="p-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Users className="w-4 h-4" />
-                  <span>Quản Trị & Tạo Tài Khoản</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => onNavigateToTab('admin_portal')}
+                    className="p-3 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Trang Quản Trị Tổng Hợp</span>
+                  </button>
+                  <button
+                    onClick={() => onNavigateToTab('students')}
+                    className="p-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Quản Lý Tài Khoản</span>
+                  </button>
+                </>
               )}
 
               <button
@@ -253,182 +277,110 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
       </div>
 
-      {/* Switch / Login New Account Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left: 1-Click Fast Demo Login (7 cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <Key className="w-5 h-5 text-blue-600" />
-                Đăng Nhập Nhanh 1-Chạm (Demo Accounts)
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Nhấp trực tiếp vào tài khoản để đăng nhập và trải nghiệm tức thì
-              </p>
+      {/* Manual Login Form */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-10 space-y-6">
+        <div className="border-b border-slate-100 pb-5">
+          <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
+              <Lock className="w-5 h-5" />
             </div>
-          </div>
-
-          {/* Role Tabs */}
-          <div className="flex p-1 bg-slate-100 rounded-xl gap-1">
-            <button
-              onClick={() => setSelectedRoleType('teacher_admin')}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                selectedRoleType === 'teacher_admin'
-                  ? 'bg-white text-blue-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 text-blue-600" />
-              <span>Giáo Viên & Quản Trị ({teacherAndAdminUsers.length})</span>
-            </button>
-
-            <button
-              onClick={() => setSelectedRoleType('student')}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                selectedRoleType === 'student'
-                  ? 'bg-white text-blue-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4 text-emerald-600" />
-              <span>Học Sinh ({studentUsers.length})</span>
-            </button>
-          </div>
-
-          {/* User Cards List */}
-          <div className="space-y-3">
-            {(selectedRoleType === 'teacher_admin' ? teacherAndAdminUsers : studentUsers).map(u => {
-              const isSelected = u.id === currentUser.id;
-              return (
-                <div
-                  key={u.id}
-                  onClick={() => handleQuickLogin(u)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-4 ${
-                    isSelected
-                      ? 'border-blue-600 bg-blue-50/70 shadow-xs ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50/80'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <img
-                      src={u.avatar}
-                      alt={u.name}
-                      className="w-11 h-11 rounded-full object-cover border border-slate-200 shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-slate-900 truncate">{u.name}</h4>
-                        <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold uppercase shrink-0 ${
-                          u.role === 'student' ? 'bg-sky-100 text-sky-800' :
-                          u.role === 'teacher' ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'
-                        }`}>
-                          {u.role === 'student' ? 'Học sinh' : u.role === 'teacher' ? 'Giáo viên' : 'Admin'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 truncate mt-0.5">
-                        Mã: <strong className="font-mono text-slate-700">{u.code}</strong> • {u.className ? `Lớp ${u.className}` : u.email}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0">
-                    {isSelected ? (
-                      <span className="text-xs font-bold text-blue-700 flex items-center gap-1">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Đang chọn
-                      </span>
-                    ) : (
-                      <span className="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-blue-900 hover:text-white hover:border-blue-900 font-semibold text-slate-700 transition-all">
-                        Đăng nhập
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+            <span>Đăng Nhập Tài Khoản Người Dùng</span>
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Vui lòng nhập chính xác Mã tài khoản hoặc Email cùng Mật khẩu để đăng nhập vào hệ thống.
+          </p>
         </div>
 
-        {/* Right: Manual Login Form (5 cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-blue-600" />
-              Đăng Nhập Bằng Mật Khẩu
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Nhập mã tài khoản hoặc email được cấp bởi nhà trường
-            </p>
+        {errorMessage && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs sm:text-sm text-rose-800 font-medium flex items-center gap-2.5 animate-in fade-in">
+            <Info className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
           </div>
+        )}
 
-          {errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 font-medium">
-              {errorMessage}
-            </div>
-          )}
+        {successMessage && (
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs sm:text-sm text-emerald-800 font-medium flex items-center gap-2.5 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+        )}
 
-          {successMessage && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium">
-              {successMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleManualLogin} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700 uppercase">
-                Tài khoản / Email / Mã định danh
-              </label>
+        <form onSubmit={handleManualLogin} className="space-y-5 max-w-2xl">
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Tài khoản / Email / Mã định danh cá nhân
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <UserIcon className="w-4 h-4" />
+              </div>
               <input
                 type="text"
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
-                placeholder="VD: mainguyen.toan@thcs.edu.vn hoặc GV-TOAN01"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 transition-all"
+                placeholder="Nhập mã (VD: GV-TINHOC01, HS-20240901) hoặc email..."
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 transition-all font-medium"
+                required
               />
             </div>
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700 uppercase">
-                Mật khẩu
-              </label>
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Mật khẩu
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Lock className="w-4 h-4" />
+              </div>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 transition-all"
+                placeholder="Nhập mật khẩu (Mặc định: 123456)..."
+                className="w-full pl-10 pr-11 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 transition-all font-medium"
+                required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
-
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" defaultChecked className="rounded text-blue-600" />
-                <span>Ghi nhớ đăng nhập</span>
-              </label>
-              <a href="#help" onClick={(e) => { e.preventDefault(); alert('Vui lòng liên hệ Quản trị viên phòng Tin học nhà trường để cấp lại mật khẩu.'); }} className="text-blue-600 hover:underline">
-                Quên mật khẩu?
-              </a>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Lock className="w-4 h-4" />
-              <span>Xác Nhận Đăng Nhập</span>
-            </button>
-          </form>
-
-          <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-2">
-            <p className="font-semibold text-slate-700">💡 Gợi ý tài khoản kiểm thử:</p>
-            <ul className="space-y-1 text-[11px] list-disc list-inside text-slate-600">
-              <li><strong className="text-slate-800">Thầy Toàn (Tin học):</strong> Mã <span className="font-mono text-blue-700 font-bold">GV-TINHOC01</span></li>
-              <li><strong className="text-slate-800">Cô Mai (Tin học):</strong> Mã <span className="font-mono text-blue-700 font-bold">GV-TINHOC02</span></li>
-              <li><strong className="text-slate-800">Quản trị viên:</strong> Mã <span className="font-mono text-blue-700 font-bold">ADMIN-TINHOC</span></li>
-              <li><strong className="text-slate-800">Học sinh 9A1:</strong> Mã <span className="font-mono text-blue-700 font-bold">HS-20240901</span></li>
-            </ul>
           </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" defaultChecked className="rounded text-blue-600" />
+              <span>Ghi nhớ phiên đăng nhập trên thiết bị này</span>
+            </label>
+            <a 
+              href="#help" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                alert('Vui lòng liên hệ Thầy Toàn hoặc Quản trị viên phòng Tin học nhà trường để được hỗ trợ cấp lại mật khẩu.'); 
+              }} 
+              className="text-blue-600 hover:underline font-semibold"
+            >
+              Quên mật khẩu?
+            </a>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Lock className="w-4 h-4" />
+            <span>Đăng Nhập Vào Hệ Thống</span>
+          </button>
+        </form>
+
+        <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+          <span>🔒 Hệ thống học tập & kiểm tra trực tuyến môn Tin học</span>
+          <span>Trường THCS Nguyễn Du</span>
         </div>
       </div>
     </div>
