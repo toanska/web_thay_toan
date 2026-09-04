@@ -129,7 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (item.id === 'admin_portal') {
       return isAuthorizedToManageStudents;
     }
-    if (item.id === 'reports' && currentUser.role === 'guest') {
+    if (item.id === 'reports' && (currentUser.role === 'guest' || currentUser.role === 'student')) {
       return false;
     }
     return true;
