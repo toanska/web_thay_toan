@@ -88,6 +88,24 @@ export const ExamList: React.FC<ExamListProps> = ({
       } else {
         const isApproved = exam.approvalStatus === 'approved' || exam.approvalStatus === undefined;
         if (!isApproved) return false;
+
+        // For logged-in student, ONLY display exams assigned to their grade and subject (and class if targeted)
+        if (currentUser.role === 'student') {
+          // Check student grade match (e.g. exam.grade matches currentUser.grade)
+          if (currentUser.grade && exam.grade !== currentUser.grade) {
+            return false;
+          }
+          // Check student subject match (if student has specific subject or general)
+          if (currentUser.subject && currentUser.subject !== 'Tất cả' && exam.subject !== currentUser.subject) {
+            return false;
+          }
+          // Check target classes if specified and not 'All'
+          if (exam.targetClasses && exam.targetClasses.length > 0 && !exam.targetClasses.includes('All') && currentUser.className) {
+            if (!exam.targetClasses.includes(currentUser.className)) {
+              return false;
+            }
+          }
+        }
       }
     }
 
