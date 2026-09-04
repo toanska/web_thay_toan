@@ -55,7 +55,6 @@ interface AdminDashboardViewProps {
   exams: Exam[];
   attempts: ExamAttempt[];
   questions: Question[];
-  initialSection?: AdminSection;
   // Handlers
   onSaveUser: (user: User) => void;
   onDeleteUser: (id: string) => void;
@@ -92,7 +91,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   exams,
   attempts,
   questions,
-  initialSection = 'overview',
   onSaveUser,
   onDeleteUser,
   onOpenCreateNews,
@@ -117,7 +115,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onDeleteAttemptsBatch,
   onNavigateToTab
 }) => {
-  const [activeSection, setActiveSection] = useState<AdminSection>(initialSection);
+  const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
   const [filterGrade, setFilterGrade] = useState<string>('all');
@@ -1046,52 +1044,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
           {/* Batch Actions & Export Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-700">
-                Đã chọn: <span className="text-blue-600">{selectedAttemptIds.length}</span> / {filteredAttempts.length} bài làm
+                Đã chọn: <span className="text-blue-600">{selectedAttemptIds.length}</span> bài làm
               </span>
-
-              <div className="h-4 w-px bg-slate-300 mx-1"></div>
-
-              {/* Allow Retake for Selected */}
-              {selectedAttemptIds.length > 0 && (
-                <button
-                  onClick={() => {
-                    if (confirm(`Bạn có chắc chắn muốn cho phép ${selectedAttemptIds.length} học sinh đã chọn làm bài lại? Thao tác này sẽ xóa kết quả cũ để học sinh có thể vào thi lại.`)) {
-                      if (onDeleteAttemptsBatch) {
-                        onDeleteAttemptsBatch(selectedAttemptIds);
-                        setSelectedAttemptIds([]);
-                        alert('Đã mở quyền làm bài lại cho các học sinh được chọn thành công!');
-                      }
-                    }
-                  }}
-                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold border border-amber-200 transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <span>🔄 Cho phép thi lại ({selectedAttemptIds.length})</span>
-                </button>
-              )}
-
-              {/* Allow Retake for All Filtered (Whole Class / Filter) */}
-              {filteredAttempts.length > 0 && (
-                <button
-                  onClick={() => {
-                    const label = attemptClassFilter !== 'all' ? `cả lớp ${attemptClassFilter}` : 'toàn bộ danh sách đang hiển thị';
-                    if (confirm(`Bạn có chắc chắn muốn cho phép ${label} (${filteredAttempts.length} học sinh) làm bài lại? Thao tác này sẽ xóa toàn bộ kết quả trong danh sách lọc.`)) {
-                      if (onDeleteAttemptsBatch) {
-                        const ids = filteredAttempts.map(a => a.id);
-                        onDeleteAttemptsBatch(ids);
-                        setSelectedAttemptIds([]);
-                        alert('Đã mở quyền làm bài lại cho toàn bộ danh sách thành công!');
-                      }
-                    }
-                  }}
-                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold border border-blue-200 transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <span>🔄 Cho phép cả lớp/lọc thi lại ({filteredAttempts.length})</span>
-                </button>
-              )}
-
-              {/* Delete Selected */}
               {selectedAttemptIds.length > 0 && (
                 <button
                   onClick={() => {
@@ -1105,19 +1061,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Xóa đã chọn</span>
+                  <span>Xóa các mục đã chọn</span>
                 </button>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
                   setSelectedAttemptIds(filteredAttempts.map(a => a.id));
                 }}
                 className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors cursor-pointer"
               >
-                Chọn tất cả
+                Chọn tất cả ({filteredAttempts.length})
               </button>
               {selectedAttemptIds.length > 0 && (
                 <button

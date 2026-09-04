@@ -550,43 +550,6 @@ export function App() {
           />
         )}
 
-        {/* Lịch sử & Kết quả (Trực tiếp từ Header) */}
-        {activeTab === 'attempts' && (
-          <AdminDashboardView
-            currentUser={currentUser}
-            users={availableUsers}
-            news={news}
-            materials={materials}
-            exams={exams}
-            attempts={attempts}
-            questions={questions}
-            initialSection="attempts"
-            onSaveUser={handleSaveUser}
-            onDeleteUser={handleDeleteUser}
-            onOpenCreateNews={() => setEditingNews(null)}
-            onEditNews={(art) => setEditingNews(art)}
-            onDeleteNews={handleDeleteNews}
-            onSelectNews={(art) => setSelectedNews(art)}
-            onApproveNews={handleApproveNews}
-            onRejectNews={handleRejectNews}
-            onOpenCreateExam={() => setEditingExam(null)}
-            onEditExam={(ex) => setEditingExam(ex)}
-            onDeleteExam={handleDeleteExam}
-            onApproveExam={handleApproveExam}
-            onRejectExam={handleRejectExam}
-            onApproveMaterial={handleApproveMaterial}
-            onRejectMaterial={handleRejectMaterial}
-            onOpenCreateQuestion={() => setEditingQuestion(null)}
-            onEditQuestion={(q) => setEditingQuestion(q)}
-            onDeleteQuestion={handleDeleteQuestion}
-            onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
-            onViewAttempt={(att) => setViewingAttempt(att)}
-            onDeleteAttempt={handleDeleteAttempt}
-            onDeleteAttemptsBatch={handleDeleteAttemptsBatch}
-            onNavigateToTab={(tab) => setActiveTab(tab)}
-          />
-        )}
-
         {/* CHỨC NĂNG 4: Quản Trị, Tạo & Chỉnh Sửa Tài Khoản (Dành riêng cho Thầy Toàn hoặc Admin) */}
         {activeTab === 'students' && (
           isTeacherToanOrAdmin(currentUser) ? (
