@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'teacher' | 'admin';
+export type UserRole = 'student' | 'teacher' | 'admin' | 'guest';
 
 export type GradeLevel = 6 | 7 | 8 | 9;
 
@@ -22,6 +22,9 @@ export interface User {
   email: string;
   phone?: string;
   school: string;
+  activeSessionToken?: string;
+  lastLoginAt?: string;
+  lastLoginDevice?: string;
 }
 
 export interface Question {
@@ -65,6 +68,11 @@ export interface Exam {
   startDate?: string;
   endDate?: string;
   createdBy: string;
+  authorRole?: UserRole;
+  approvalStatus?: 'approved' | 'pending_approval' | 'rejected';
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
 }
 
 export interface QuestionResult {
@@ -121,12 +129,17 @@ export interface NewsArticle {
   publishedAt: string;
   authorName: string;
   authorTitle: string;
+  authorRole?: UserRole;
   views: number;
   likes: number;
   isPinned: boolean;
   tags: string[];
   attachments?: { name: string; size: string; url?: string }[];
   comments: Comment[];
+  approvalStatus?: 'approved' | 'pending_approval' | 'rejected';
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
 }
 
 export interface LessonMaterial {
@@ -152,6 +165,10 @@ export interface LessonMaterial {
   tags: string[];
   externalVideoUrl?: string;
   contentOutline?: string;
+  approvalStatus?: 'approved' | 'pending_approval' | 'rejected';
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
 }
 
 export type MaterialType = 'all' | 'lecture' | 'lesson_plan' | 'slide' | 'exercise' | 'software' | 'reference';
@@ -173,9 +190,11 @@ export interface CloudflareConfig {
   apiSecret?: string;
   enabled: boolean;
   autoSync: boolean;
+  autoSyncIntervalSeconds?: number; // e.g. 20s
   lastSyncedAt?: string;
   status: 'idle' | 'syncing' | 'connected' | 'error';
   lastError?: string;
+  syncCount?: number;
 }
 
 export type NavigationTab = 

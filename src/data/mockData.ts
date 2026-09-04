@@ -1,5 +1,15 @@
 import { User, Question, Exam, ExamAttempt, NewsArticle, NotificationItem, LessonMaterial } from '../types';
 
+export const GUEST_USER: User = {
+  id: 'user-guest',
+  name: 'Khách truy cập',
+  role: 'guest',
+  code: 'KHACH',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+  email: 'khach@thcs.edu.vn',
+  school: 'Trường THCS Nguyễn Du',
+};
+
 export const INITIAL_USERS: User[] = [
   {
     id: 'user-student-1',

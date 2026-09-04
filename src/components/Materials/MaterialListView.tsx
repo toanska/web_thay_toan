@@ -25,12 +25,18 @@ import {
   Layers,
   ArrowUpDown,
   ExternalLink,
-  Laptop
+  Laptop,
+  Clock,
+  ShieldCheck,
+  XCircle,
+  AlertTriangle,
+  Check
 } from 'lucide-react';
 import { LessonMaterial, GradeLevel, MaterialType, User } from '../../types';
 import { MaterialUploadModal } from './MaterialUploadModal';
 import { MaterialDetailModal } from './MaterialDetailModal';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
+import { RejectModal } from '../Admin/RejectModal';
 
 interface MaterialListViewProps {
   materials: LessonMaterial[];
@@ -39,6 +45,8 @@ interface MaterialListViewProps {
   onDeleteMaterial: (id: string) => void;
   onIncrementDownload: (id: string) => void;
   onIncrementView: (id: string) => void;
+  onApproveMaterial?: (id: string) => void;
+  onRejectMaterial?: (id: string, reason: string) => void;
   onNavigateToLogin?: () => void;
 }
 
@@ -49,10 +57,13 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
   onDeleteMaterial,
   onIncrementDownload,
   onIncrementView,
+  onApproveMaterial,
+  onRejectMaterial,
   onNavigateToLogin
 }) => {
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel | 'all'>('all');
   const [selectedType, setSelectedType] = useState<MaterialType>('all');
+  const [moderationFilter, setModerationFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'downloads' | 'views' | 'title'>('newest');
   
@@ -61,8 +72,16 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
   const [editingMaterial, setEditingMaterial] = useState<LessonMaterial | null>(null);
   const [viewingMaterial, setViewingMaterial] = useState<LessonMaterial | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [rejectMaterialTarget, setRejectMaterialTarget] = useState<LessonMaterial | null>(null);
 
-  const canManage = isTeacherToanOrAdmin(currentUser) || currentUser.role === 'teacher' || currentUser.role === 'admin';
+  const isModerator = isTeacherToanOrAdmin(currentUser);
+  const isTeacher = currentUser.role === 'teacher';
+  const canManage = isModerator || isTeacher || currentUser.role === 'admin';
+
+  // Count pending materials
+  const pendingCount = useMemo(() => {
+    return materials.filter(m => m.approvalStatus === 'pending_approval').length;
+  }, [materials]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -77,6 +96,25 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
   // Filtered & Sorted list
   const filteredMaterials = useMemo(() => {
     return materials.filter(item => {
+      // Permission visibility rules
+      if (!isModerator) {
+        if (isTeacher) {
+          const isAuthor = item.authorName === currentUser.name;
+          const isApproved = item.approvalStatus === 'approved' || item.approvalStatus === undefined;
+          if (!isApproved && !isAuthor) return false;
+        } else {
+          const isApproved = item.approvalStatus === 'approved' || item.approvalStatus === undefined;
+          if (!isApproved) return false;
+        }
+      }
+
+      // Moderation filter for moderators
+      if (isModerator && moderationFilter !== 'all') {
+        if (moderationFilter === 'pending' && item.approvalStatus !== 'pending_approval') return false;
+        if (moderationFilter === 'approved' && item.approvalStatus !== 'approved' && item.approvalStatus !== undefined) return false;
+        if (moderationFilter === 'rejected' && item.approvalStatus !== 'rejected') return false;
+      }
+
       const matchGrade = selectedGrade === 'all' || item.grade === selectedGrade;
       const matchType = selectedType === 'all' || item.type === selectedType;
       const query = searchQuery.toLowerCase().trim();
@@ -106,7 +144,7 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
       }
       return 0;
     });
-  }, [materials, selectedGrade, selectedType, searchQuery, sortBy]);
+  }, [materials, selectedGrade, selectedType, searchQuery, sortBy, isModerator, isTeacher, currentUser.name, moderationFilter]);
 
   const pinnedList = filteredMaterials.filter(m => m.isPinned);
   const regularList = filteredMaterials.filter(m => !m.isPinned);
@@ -240,6 +278,62 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
       {/* Filter Toolbar */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-4">
         
+        {/* Moderation tabs (if moderator) */}
+        {isModerator && (
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-100 overflow-x-auto">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+              <ShieldCheck className="w-4 h-4 text-indigo-600" />
+              Kiểm duyệt học liệu:
+            </span>
+            <button
+              onClick={() => setModerationFilter('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                moderationFilter === 'all'
+                  ? 'bg-indigo-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Tất cả ({materials.length})
+            </button>
+            <button
+              onClick={() => setModerationFilter('pending')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                moderationFilter === 'pending'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Chờ Thầy Toàn / Admin duyệt</span>
+              {pendingCount > 0 && (
+                <span className="bg-amber-600 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setModerationFilter('approved')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                moderationFilter === 'approved'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              Đã duyệt
+            </button>
+            <button
+              onClick={() => setModerationFilter('rejected')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                moderationFilter === 'rejected'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+              }`}
+            >
+              Từ chối
+            </button>
+          </div>
+        )}
+
         {/* Grade Tabs */}
         <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
@@ -426,7 +520,7 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
                   
                   {/* Category & Pin badges */}
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center flex-wrap gap-1.5">
                       <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100">
                         Tin học {mat.grade}
                       </span>
@@ -434,6 +528,18 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
                         <BadgeIcon className="w-3 h-3" />
                         <span>{badge.label}</span>
                       </span>
+                      {mat.approvalStatus === 'pending_approval' && (
+                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-500 text-slate-950 flex items-center gap-1 shadow-2xs">
+                          <Clock className="w-3 h-3" />
+                          Chờ duyệt
+                        </span>
+                      )}
+                      {mat.approvalStatus === 'rejected' && (
+                        <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-rose-600 text-white flex items-center gap-1 shadow-2xs">
+                          <XCircle className="w-3 h-3" />
+                          Bị từ chối
+                        </span>
+                      )}
                     </div>
 
                     {mat.isPinned && (
@@ -443,6 +549,47 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
                       </span>
                     )}
                   </div>
+
+                  {/* Moderation Action Banner on Material Card */}
+                  {mat.approvalStatus === 'pending_approval' && (
+                    <div className="bg-amber-50 rounded-xl border border-amber-200 p-2.5 flex items-center justify-between text-xs">
+                      <span className="text-amber-900 font-semibold flex items-center gap-1 text-[11px]">
+                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        {isModerator ? 'Giáo viên gửi duyệt:' : 'Đang chờ Thầy Toàn / Admin duyệt'}
+                      </span>
+                      {isModerator && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onApproveMaterial) onApproveMaterial(mat.id);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Duyệt</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRejectMaterialTarget(mat);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            <span>Từ chối</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {mat.approvalStatus === 'rejected' && mat.rejectionReason && (
+                    <div className="bg-rose-50 rounded-xl border border-rose-200 p-2.5 text-xs text-rose-800 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                      <span className="text-[11px]"><strong>Lý do từ chối:</strong> {mat.rejectionReason}</span>
+                    </div>
+                  )}
 
                   {/* Title */}
                   <h3 
@@ -613,6 +760,22 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Reject Modal for Material */}
+      {rejectMaterialTarget && (
+        <RejectModal
+          isOpen={!!rejectMaterialTarget}
+          itemType="tài liệu học tập"
+          itemTitle={rejectMaterialTarget.title}
+          onConfirm={(reason) => {
+            if (onRejectMaterial) {
+              onRejectMaterial(rejectMaterialTarget.id, reason);
+            }
+            setRejectMaterialTarget(null);
+          }}
+          onClose={() => setRejectMaterialTarget(null)}
+        />
       )}
 
     </div>

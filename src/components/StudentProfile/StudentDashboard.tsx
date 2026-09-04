@@ -12,7 +12,8 @@ import {
   Star, 
   ShieldCheck, 
   ChevronRight,
-  Flame
+  Flame,
+  KeyRound
 } from 'lucide-react';
 import { ExamAttempt, User, Exam } from '../../types';
 
@@ -22,6 +23,7 @@ interface StudentDashboardProps {
   exams: Exam[];
   onViewAttempt: (attempt: ExamAttempt) => void;
   onTakeExam: (exam: Exam) => void;
+  onOpenChangePassword?: () => void;
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
@@ -29,7 +31,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   attempts,
   exams,
   onViewAttempt,
-  onTakeExam
+  onTakeExam,
+  onOpenChangePassword
 }) => {
   const isStudent = currentUser.role === 'student';
   const myAttempts = isStudent 
@@ -81,8 +84,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight font-serif text-white">
               {currentUser.name}
             </h2>
-            <p className="text-xs text-blue-200">
-              {currentUser.className ? `Lớp ${currentUser.className} • ` : ''}Mã định danh: <span className="font-mono text-white font-bold">{currentUser.code}</span>
+            <p className="text-xs text-blue-200 flex items-center gap-2 flex-wrap">
+              <span>{currentUser.className ? `Lớp ${currentUser.className} • ` : ''}Mã định danh: <span className="font-mono text-white font-bold">{currentUser.code}</span></span>
+              {onOpenChangePassword && (
+                <button
+                  type="button"
+                  onClick={onOpenChangePassword}
+                  className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <KeyRound className="w-3 h-3 text-amber-300" />
+                  <span>Đổi mật khẩu</span>
+                </button>
+              )}
             </p>
           </div>
         </div>

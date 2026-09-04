@@ -15,10 +15,18 @@ import {
   Trash2,
   BookOpen,
   Sparkles,
-  TrendingUp
+  TrendingUp,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 import { NewsArticle, User } from '../../types';
 import { LogIn } from 'lucide-react';
+import { isTeacherToanOrAdmin } from '../../utils/authUtils';
+import { RejectModal } from '../Admin/RejectModal';
 
 interface NewsListProps {
   news: NewsArticle[];
@@ -28,6 +36,8 @@ interface NewsListProps {
   onEditArticle: (article: NewsArticle) => void;
   onDeleteArticle: (id: string) => void;
   onLikeArticle: (id: string) => void;
+  onApproveArticle?: (id: string) => void;
+  onRejectArticle?: (id: string, reason: string) => void;
   onNavigateToLogin?: () => void;
 }
 
@@ -45,12 +55,46 @@ export const NewsList: React.FC<NewsListProps> = ({
   onEditArticle,
   onDeleteArticle,
   onLikeArticle,
+  onApproveArticle,
+  onRejectArticle,
   onNavigateToLogin
 }) => {
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
+  const [moderationFilter, setModerationFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Rejection modal state
+  const [rejectArticleTarget, setRejectArticleTarget] = useState<NewsArticle | null>(null);
+
+  const isModerator = isTeacherToanOrAdmin(currentUser);
+  const isTeacher = currentUser.role === 'teacher';
+  const canManageNews = isTeacher || currentUser.role === 'admin';
+
+  // Count pending articles
+  const pendingCount = news.filter(n => n.approvalStatus === 'pending_approval').length;
 
   const filteredNews = news.filter(item => {
+    // Permission visibility rules
+    if (!isModerator) {
+      if (isTeacher) {
+        // Teachers see approved articles OR articles authored by themselves
+        const isAuthor = item.authorName === currentUser.name;
+        const isApproved = item.approvalStatus === 'approved' || item.approvalStatus === undefined;
+        if (!isApproved && !isAuthor) return false;
+      } else {
+        // Students & Guests only see approved articles
+        const isApproved = item.approvalStatus === 'approved' || item.approvalStatus === undefined;
+        if (!isApproved) return false;
+      }
+    }
+
+    // Moderation filter for moderators/teachers
+    if (isModerator && moderationFilter !== 'all') {
+      if (moderationFilter === 'pending' && item.approvalStatus !== 'pending_approval') return false;
+      if (moderationFilter === 'approved' && item.approvalStatus !== 'approved' && item.approvalStatus !== undefined) return false;
+      if (moderationFilter === 'rejected' && item.approvalStatus !== 'rejected') return false;
+    }
+
     const matchCategory = selectedCategory === 'Tất cả' || item.category === selectedCategory;
     const matchQuery = 
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -61,8 +105,6 @@ export const NewsList: React.FC<NewsListProps> = ({
 
   const pinnedNews = filteredNews.filter(n => n.isPinned);
   const regularNews = filteredNews.filter(n => !n.isPinned);
-
-  const canManageNews = currentUser.role === 'teacher' || currentUser.role === 'admin';
 
   return (
     <div className="space-y-6">
@@ -103,43 +145,101 @@ export const NewsList: React.FC<NewsListProps> = ({
         </div>
       </div>
 
-      {/* Category Pills & Search */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-        {/* Category filters */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-thin">
-          {CATEGORIES.map(cat => (
+      {/* Category Pills, Moderation Filter & Search */}
+      <div className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+        {/* Moderation tabs (if moderator) */}
+        {isModerator && (
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-100 overflow-x-auto">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+              <ShieldCheck className="w-4 h-4 text-indigo-600" />
+              Kiểm duyệt bài viết:
+            </span>
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                selectedCategory === cat
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              onClick={() => setModerationFilter('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                moderationFilter === 'all'
+                  ? 'bg-indigo-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {cat}
+              Tất cả ({news.length})
             </button>
-          ))}
-        </div>
-
-        {/* Search Input */}
-        <div className="relative w-full md:w-72 shrink-0">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Tìm tin tức, thông báo, từ khóa..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-          />
-          {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+              onClick={() => setModerationFilter('pending')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                moderationFilter === 'pending'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+              }`}
             >
-              ×
+              <Clock className="w-3.5 h-3.5" />
+              <span>Chờ Thầy Toàn / Admin duyệt</span>
+              {pendingCount > 0 && (
+                <span className="bg-amber-600 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+                  {pendingCount}
+                </span>
+              )}
             </button>
-          )}
+            <button
+              onClick={() => setModerationFilter('approved')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                moderationFilter === 'approved'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              Đã duyệt
+            </button>
+            <button
+              onClick={() => setModerationFilter('rejected')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                moderationFilter === 'rejected'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+              }`}
+            >
+              Từ chối
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          {/* Category filters */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-thin">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Input */}
+          <div className="relative w-full md:w-72 shrink-0">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Tìm tin tức, thông báo, từ khóa..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -264,12 +364,65 @@ export const NewsList: React.FC<NewsListProps> = ({
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
-                  <div className="absolute top-3 left-3">
+                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-900/80 backdrop-blur-xs text-white border border-white/20">
                       {item.category}
                     </span>
+                    {item.approvalStatus === 'pending_approval' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-950 flex items-center gap-1 shadow-sm">
+                        <Clock className="w-3 h-3" />
+                        Chờ duyệt
+                      </span>
+                    )}
+                    {item.approvalStatus === 'rejected' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white flex items-center gap-1 shadow-sm">
+                        <XCircle className="w-3 h-3" />
+                        Bị từ chối
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                {/* Moderation Action Banner on Card */}
+                {item.approvalStatus === 'pending_approval' && (
+                  <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between text-xs">
+                    <span className="text-amber-900 font-semibold flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      {isModerator ? 'Bài của giáo viên gửi duyệt:' : 'Đang chờ Thầy Toàn / Admin duyệt'}
+                    </span>
+                    {isModerator && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onApproveArticle) onApproveArticle(item.id);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Duyệt</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRejectArticleTarget(item);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                        >
+                          <XCircle className="w-3 h-3" />
+                          <span>Từ chối</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {item.approvalStatus === 'rejected' && item.rejectionReason && (
+                  <div className="bg-rose-50 border-b border-rose-200 px-4 py-2 text-xs text-rose-800 flex items-start gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                    <span><strong>Lý do từ chối:</strong> {item.rejectionReason}</span>
+                  </div>
+                )}
 
                 {/* Content */}
                 <div className="p-5 flex-1 flex flex-col justify-between">
@@ -361,6 +514,21 @@ export const NewsList: React.FC<NewsListProps> = ({
           </div>
         )}
       </div>
+      {/* Reject Modal */}
+      {rejectArticleTarget && (
+        <RejectModal
+          isOpen={!!rejectArticleTarget}
+          itemType="bài viết"
+          itemTitle={rejectArticleTarget.title}
+          onConfirm={(reason) => {
+            if (onRejectArticle) {
+              onRejectArticle(rejectArticleTarget.id, reason);
+            }
+            setRejectArticleTarget(null);
+          }}
+          onClose={() => setRejectArticleTarget(null)}
+        />
+      )}
     </div>
   );
 };

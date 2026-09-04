@@ -16,9 +16,12 @@ import {
   Layers, 
   Youtube, 
   Info,
-  ListOrdered
+  ListOrdered,
+  Clock,
+  ShieldCheck
 } from 'lucide-react';
 import { LessonMaterial, GradeLevel, Subject, User } from '../../types';
+import { isTeacherToanOrAdmin } from '../../utils/authUtils';
 
 interface MaterialUploadModalProps {
   isOpen: boolean;
@@ -226,6 +229,8 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
       return;
     }
 
+    const isModerator = isTeacherToanOrAdmin(currentUser);
+
     const material: LessonMaterial = {
       id: editingMaterial ? editingMaterial.id : `mat-${Date.now()}`,
       title: title.trim(),
@@ -247,7 +252,10 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
       downloadCount: editingMaterial ? editingMaterial.downloadCount : 0,
       viewCount: editingMaterial ? editingMaterial.viewCount : 1,
       createdAt: editingMaterial ? editingMaterial.createdAt : new Date().toISOString().split('T')[0],
-      updatedAt: editingMaterial ? new Date().toISOString().split('T')[0] : undefined
+      updatedAt: editingMaterial ? new Date().toISOString().split('T')[0] : undefined,
+      approvalStatus: isModerator ? 'approved' : 'pending_approval',
+      approvedBy: isModerator ? currentUser.name : undefined,
+      approvedAt: isModerator ? new Date().toISOString() : undefined
     };
 
     onSave(material);
@@ -285,6 +293,25 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
 
         {/* Modal Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-6">
+          
+          {/* Moderation Workflow Notice */}
+          {!isTeacherToanOrAdmin(currentUser) ? (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Quy trình kiểm duyệt học liệu: </span>
+                Bài giảng / Giáo án do giáo viên tải lên sẽ được chuyển đến hàng đợi phê duyệt của <strong>Thầy Toàn hoặc Quản trị viên (Admin)</strong> trước khi hiển thị cho toàn trường.
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div>
+                <span className="font-bold">Đặc quyền Thầy Toàn / Admin: </span>
+                Học liệu sẽ được tự động phê duyệt và kích hoạt tải về ngay lập tức.
+              </div>
+            </div>
+          )}
           
           {/* File Upload Dropzone */}
           <div className="space-y-2">

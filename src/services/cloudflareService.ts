@@ -6,8 +6,9 @@ const CF_CONFIG_KEY = 'thcs_cloudflare_config_v1';
 const DEFAULT_CONFIG: CloudflareConfig = {
   workerUrl: '',
   apiSecret: '',
-  enabled: false,
-  autoSync: false,
+  enabled: true,
+  autoSync: true,
+  autoSyncIntervalSeconds: 20,
   status: 'idle',
 };
 
@@ -148,6 +149,9 @@ export const CloudflareService = {
     const updated: CloudflareConfig = { ...current, ...config };
     try {
       localStorage.setItem(CF_CONFIG_KEY, JSON.stringify(updated));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thcs_cloudflare_config_updated', { detail: updated }));
+      }
     } catch (e) {
       console.error('Error saving Cloudflare config', e);
     }
@@ -209,15 +213,7 @@ export const CloudflareService = {
 
     try {
       // Gather current local database payload
-      const payload = {
-        users: StorageService.getUsers(),
-        questions: StorageService.getQuestions(),
-        exams: StorageService.getExams(),
-        attempts: StorageService.getAttempts(),
-        news: StorageService.getNews(),
-        materials: StorageService.getMaterials(),
-        exportedAt: new Date().toISOString(),
-      };
+      const payload = StorageService.getDatabasePayload();
 
       const syncUrl = `${url}/api/database`;
       const headers: Record<string, string> = {
@@ -226,6 +222,8 @@ export const CloudflareService = {
       if (config.apiSecret) {
         headers['Authorization'] = `Bearer ${config.apiSecret}`;
       }
+
+      this.saveConfig({ status: 'syncing' });
 
       const res = await fetch(syncUrl, {
         method: 'POST',
@@ -245,19 +243,33 @@ export const CloudflareService = {
         status: 'connected',
         lastSyncedAt: new Date().toISOString(),
         lastError: undefined,
+        syncCount: (config.syncCount || 0) + 1,
       });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thcs_sync_status_changed', {
+          detail: { status: 'connected', action: 'push', timestamp: new Date().toISOString() }
+        }));
+      }
 
       return {
         success: true,
-        message: 'Đã lưu và đồng bộ toàn bộ dữ liệu lên Cloudflare KV thành công!',
+        message: 'Đã tự động lưu và đồng bộ toàn bộ dữ liệu lên Cloudflare KV thành công!',
         savedAt: result.savedAt || new Date().toISOString(),
       };
     } catch (e: any) {
-      console.error('Cloudflare push failed', e);
+      console.warn('Cloudflare auto-push failed', e);
       this.saveConfig({
         status: 'error',
         lastError: e.message,
       });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thcs_sync_status_changed', {
+          detail: { status: 'error', error: e.message, action: 'push' }
+        }));
+      }
+
       return {
         success: false,
         message: e.message || 'Lỗi khi gửi dữ liệu lên Cloudflare',
@@ -265,8 +277,8 @@ export const CloudflareService = {
     }
   },
 
-  // Pull database from Cloudflare KV and apply to local storage
-  async pullDataFromCloud(customConfig?: CloudflareConfig): Promise<{ success: boolean; message: string; data?: any }> {
+  // Pull database from Cloudflare KV and apply to local storage using smart merge
+  async pullDataFromCloud(customConfig?: CloudflareConfig, useMerge = true): Promise<{ success: boolean; message: string; updated?: boolean; newAttemptsCount?: number; data?: any }> {
     const config = customConfig || this.getConfig();
     const url = this.cleanUrl(config.workerUrl);
 
@@ -297,33 +309,62 @@ export const CloudflareService = {
       if (remoteData.empty) {
         return {
           success: true,
-          message: 'Trên Cloudflare hiện chưa có dữ liệu nào. Hãy dùng chức năng "Đẩy dữ liệu lên Cloud" trước.',
+          message: 'Trên Cloudflare hiện chưa có dữ liệu nào.',
+          updated: false,
         };
       }
 
       // Apply imported data into localStorage
-      const success = StorageService.importBackup(JSON.stringify(remoteData));
-      if (!success) {
-        throw new Error('Dữ liệu từ Cloudflare không đúng định dạng JSON hợp lệ');
+      let wasUpdated = false;
+      let newAttempts = 0;
+
+      if (useMerge) {
+        const mergeResult = StorageService.smartMergeBackup(remoteData);
+        wasUpdated = mergeResult.updated;
+        newAttempts = mergeResult.newAttemptsCount;
+      } else {
+        wasUpdated = StorageService.importBackup(JSON.stringify(remoteData), false);
       }
 
       this.saveConfig({
         status: 'connected',
         lastSyncedAt: new Date().toISOString(),
         lastError: undefined,
+        syncCount: (config.syncCount || 0) + 1,
       });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thcs_sync_status_changed', {
+          detail: { status: 'connected', action: 'pull', updated: wasUpdated, newAttempts, timestamp: new Date().toISOString() }
+        }));
+
+        if (wasUpdated) {
+          window.dispatchEvent(new CustomEvent('thcs_remote_storage_updated', {
+            detail: { source: 'cloud_sync', newAttempts }
+          }));
+        }
+      }
 
       return {
         success: true,
-        message: 'Đã tải và cập nhật toàn bộ dữ liệu mới nhất từ Cloudflare về máy!',
+        message: 'Đã tự động tải và cập nhật toàn bộ dữ liệu mới nhất từ Cloudflare về máy!',
+        updated: wasUpdated,
+        newAttemptsCount: newAttempts,
         data: remoteData,
       };
     } catch (e: any) {
-      console.error('Cloudflare pull failed', e);
+      console.warn('Cloudflare auto-pull failed', e);
       this.saveConfig({
         status: 'error',
         lastError: e.message,
       });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('thcs_sync_status_changed', {
+          detail: { status: 'error', error: e.message, action: 'pull' }
+        }));
+      }
+
       return {
         success: false,
         message: e.message || 'Lỗi khi tải dữ liệu từ Cloudflare',
@@ -331,14 +372,89 @@ export const CloudflareService = {
     }
   },
 
-  // Automatic trigger if enabled
+  // Debounced auto-push when local state changes
+  _pushTimeout: null as any,
   triggerAutoSync(): void {
     const config = this.getConfig();
-    if (config.enabled && config.autoSync && config.workerUrl) {
-      // Debounced or non-blocking push
-      setTimeout(() => {
-        this.pushDataToCloud(config).catch(err => console.warn('AutoSync warning:', err));
-      }, 1000);
+    if (!config.enabled || !config.autoSync || !config.workerUrl) {
+      return;
     }
+
+    if (this._pushTimeout) {
+      clearTimeout(this._pushTimeout);
+    }
+
+    // Debounce 800ms to batch rapid mutations
+    this._pushTimeout = setTimeout(() => {
+      this.pushDataToCloud(config).catch(err => console.warn('Auto-push warning:', err));
+    }, 800);
+  },
+
+  // Setup background auto-sync polling loop and lifecycle listeners
+  initAutoSyncLoop(onDataUpdated?: () => void): () => void {
+    // 1. Initial silent pull from cloud on startup
+    const initialConfig = this.getConfig();
+    if (initialConfig.enabled && initialConfig.workerUrl) {
+      this.pullDataFromCloud(initialConfig, true).then(res => {
+        if (res.updated && onDataUpdated) {
+          onDataUpdated();
+        }
+      }).catch(err => console.warn('Initial auto-sync pull failed:', err));
+    }
+
+    // 2. Periodic background poll interval
+    const intervalSec = Math.max(10, initialConfig.autoSyncIntervalSeconds || 20);
+    const intervalId = setInterval(() => {
+      const currentConfig = this.getConfig();
+      if (currentConfig.enabled && currentConfig.autoSync && currentConfig.workerUrl && navigator.onLine) {
+        this.pullDataFromCloud(currentConfig, true).then(res => {
+          if (res.updated && onDataUpdated) {
+            onDataUpdated();
+          }
+        }).catch(() => {});
+      }
+    }, intervalSec * 1000);
+
+    // 3. Auto-sync on window focus (when teacher or student returns to browser tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        const cfg = this.getConfig();
+        if (cfg.enabled && cfg.autoSync && cfg.workerUrl) {
+          this.pullDataFromCloud(cfg, true).then(res => {
+            if (res.updated && onDataUpdated) {
+              onDataUpdated();
+            }
+          }).catch(() => {});
+        }
+      }
+    };
+
+    // 4. Auto-sync on network reconnection
+    const handleOnline = () => {
+      const cfg = this.getConfig();
+      if (cfg.enabled && cfg.autoSync && cfg.workerUrl) {
+        // First push any pending local changes, then pull fresh data
+        this.pushDataToCloud(cfg).then(() => {
+          return this.pullDataFromCloud(cfg, true);
+        }).then(res => {
+          if (res?.updated && onDataUpdated) {
+            onDataUpdated();
+          }
+        }).catch(() => {});
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('online', handleOnline);
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      if (typeof window !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('online', handleOnline);
+      }
+    };
   }
 };

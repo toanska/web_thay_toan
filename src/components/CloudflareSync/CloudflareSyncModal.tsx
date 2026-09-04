@@ -135,13 +135,14 @@ export const CloudflareSyncModal: React.FC<CloudflareSyncModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold">Lưu Trữ Đám Mây Cloudflare KV</h2>
-                <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-semibold uppercase tracking-wider">
-                  Miễn Phí 100%
+                <h2 className="text-base sm:text-lg font-bold">Đồng Bộ Cơ Sở Dữ Liệu Tự Động</h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-xs flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                  Tự Động 100%
                 </span>
               </div>
               <p className="text-xs text-orange-100 mt-0.5">
-                Đồng bộ bài giảng, đề thi, câu hỏi và điểm số học sinh tức thì
+                Tự động lưu và tải bài giảng, đề thi, bài nộp học sinh hai chiều mà không cần ấn thủ công
               </p>
             </div>
           </div>
@@ -198,6 +199,34 @@ export const CloudflareSyncModal: React.FC<CloudflareSyncModalProps> = ({
           {/* TAB 1: CẤU HÌNH KẾT NỐI */}
           {activeTab === 'config' && (
             <div className="space-y-5">
+              {/* Auto Sync Banner */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-700">
+                  <RefreshCw className="w-5 h-5 animate-spin" style={{ animationDuration: '4s' }} />
+                </div>
+                <div className="text-xs text-slate-700 space-y-1.5 flex-1">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="font-bold text-emerald-800 text-sm flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Chế độ Tự Động Đồng Bộ: ĐANG HOẠT ĐỘNG
+                    </p>
+                    {config.syncCount !== undefined && config.syncCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[11px]">
+                        Đã đồng bộ tự động {config.syncCount} lần
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-slate-600 leading-relaxed">
+                    Hệ thống <strong>hoàn toàn tự động đồng bộ hai chiều</strong> với cơ sở dữ liệu. Bạn <strong>không cần phải ấn nút thủ công</strong>:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-600">
+                    <li><strong>Tự động lưu (Push):</strong> Khi học sinh nộp bài thi, giáo viên tạo đề, sửa câu hỏi hay đổi mật khẩu, dữ liệu tự động đẩy lên máy chủ.</li>
+                    <li><strong>Tự động tải mới (Pull):</strong> Cứ mỗi {config.autoSyncIntervalSeconds || 20} giây và mỗi khi bạn mở lại website, hệ thống tự kéo và gộp điểm số/đề thi mới nhất.</li>
+                    <li><strong>Đồng bộ đa tab (Broadcast):</strong> Tất cả các tab mở trên máy tính được cập nhật thời gian thực tức thì.</li>
+                  </ul>
+                </div>
+              </div>
+
               {/* Cloudflare Connection Info Card */}
               <div className="p-3.5 rounded-xl bg-orange-50/70 border border-orange-200/80 flex items-start gap-3">
                 <Database className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
@@ -265,7 +294,7 @@ export const CloudflareSyncModal: React.FC<CloudflareSyncModalProps> = ({
                   />
                 </div>
 
-                {/* Toggles */}
+                {/* Toggles and Interval Setting */}
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -285,8 +314,8 @@ export const CloudflareSyncModal: React.FC<CloudflareSyncModalProps> = ({
 
                   <div className="flex items-center justify-between border-t border-slate-200 pt-3">
                     <div>
-                      <div className="text-xs font-bold text-slate-800">Tự động đồng bộ nền (Auto-Sync)</div>
-                      <div className="text-[11px] text-slate-500">Tự động đẩy lên Cloudflare mỗi khi có bài làm, đề thi hoặc tài liệu mới</div>
+                      <div className="text-xs font-bold text-slate-800">Tự động đồng bộ liên tục (Auto-Sync)</div>
+                      <div className="text-[11px] text-slate-500">Tự động lưu và tải dữ liệu nền không cần ấn thủ công</div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -297,6 +326,29 @@ export const CloudflareSyncModal: React.FC<CloudflareSyncModalProps> = ({
                       />
                       <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
                     </label>
+                  </div>
+
+                  {/* Frequency Interval Chooser */}
+                  <div className="border-t border-slate-200 pt-3 flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <div className="text-xs font-bold text-slate-800">Chu kỳ tự động kéo dữ liệu mới:</div>
+                      <div className="text-[11px] text-slate-500">Tự động kiểm tra bài làm và cập nhật mới từ máy chủ</div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {[15, 20, 30, 60].map((sec) => (
+                        <button
+                          key={sec}
+                          onClick={() => handleSaveConfig({ autoSyncIntervalSeconds: sec })}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                            (config.autoSyncIntervalSeconds || 20) === sec
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {sec}s
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -326,25 +378,30 @@ export const CloudflareSyncModal: React.FC<CloudflareSyncModalProps> = ({
                   </div>
                 )}
 
-                {/* Manual Action Buttons */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <button
-                    onClick={handlePushData}
-                    disabled={isSyncing || !config.workerUrl}
-                    className="p-3 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                  >
-                    <UploadCloud className="w-4 h-4" />
-                    <span>Đẩy dữ liệu máy này lên Cloudflare</span>
-                  </button>
+                {/* Optional Manual Action Buttons */}
+                <div className="pt-2">
+                  <div className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wider">
+                    Thao tác thủ công tức thời (Tùy chọn khi muốn cưỡng chế làm mới)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={handlePushData}
+                      disabled={isSyncing || !config.workerUrl}
+                      className="p-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                      <span>Đẩy ngay lên máy chủ</span>
+                    </button>
 
-                  <button
-                    onClick={handlePullData}
-                    disabled={isSyncing || !config.workerUrl}
-                    className="p-3 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                  >
-                    <DownloadCloud className="w-4 h-4" />
-                    <span>Kéo dữ liệu từ Cloudflare về máy này</span>
-                  </button>
+                    <button
+                      onClick={handlePullData}
+                      disabled={isSyncing || !config.workerUrl}
+                      className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                    >
+                      <DownloadCloud className="w-4 h-4" />
+                      <span>Kéo ngay từ máy chủ về</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Last Sync Info */}

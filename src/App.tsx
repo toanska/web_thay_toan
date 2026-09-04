@@ -14,13 +14,16 @@ import { AnalyticsDashboard } from './components/Reports/AnalyticsDashboard';
 import { StudentDashboard } from './components/StudentProfile/StudentDashboard';
 import { ScoreLookupView } from './components/ScoreLookup/ScoreLookupView';
 import { LoginPage } from './components/Auth/LoginPage';
+import { LoginModal } from './components/Auth/LoginModal';
+import { ChangePasswordModal } from './components/Auth/ChangePasswordModal';
+import { SessionConflictModal } from './components/Auth/SessionConflictModal';
 import { AccountManagementView } from './components/AccountManager/AccountManagementView';
 import { AdminDashboardView } from './components/Admin/AdminDashboardView';
 import { MaterialListView } from './components/Materials/MaterialListView';
 import { CloudflareSyncModal } from './components/CloudflareSync/CloudflareSyncModal';
 import { isTeacherToanOrAdmin } from './utils/authUtils';
 
-import { StorageService } from './services/storageService';
+import { StorageService, authSessionChannel } from './services/storageService';
 import { CloudflareService } from './services/cloudflareService';
 import { 
   User, 
@@ -57,6 +60,15 @@ export function App() {
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [viewingAttempt, setViewingAttempt] = useState<ExamAttempt | null>(null);
   const [isCloudflareModalOpen, setIsCloudflareModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [sessionConflictData, setSessionConflictData] = useState<{
+    isOpen: boolean;
+    userName: string;
+    userCode: string;
+    newDevice: string;
+  } | null>(null);
+  const [syncToast, setSyncToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
   const reloadAllData = () => {
     setNews(StorageService.getNews());
@@ -68,18 +80,107 @@ export function App() {
     setAvailableUsers(StorageService.getUsers());
   };
 
-  // Load initial data from StorageService
+  // Load initial data and run automatic real-time background sync loop
   useEffect(() => {
     reloadAllData();
 
-    // Listen for storage updates to trigger auto sync if enabled
+    // 1. Listen for local storage updates to trigger debounced auto-push
     const handleStorageUpdated = () => {
       CloudflareService.triggerAutoSync();
     };
 
+    // 2. Listen for remote storage updates (from other tabs via BroadcastChannel or background cloud pull)
+    const handleRemoteStorageUpdated = (event: any) => {
+      reloadAllData();
+      if (event?.detail?.newAttempts && event.detail.newAttempts > 0) {
+        setSyncToast({
+          message: `Tự động đồng bộ: Đã cập nhật ${event.detail.newAttempts} bài thi mới!`,
+          type: 'success'
+        });
+        setTimeout(() => setSyncToast(null), 3500);
+      }
+    };
+
+    // 3. Fallback for multi-window storage events
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('thcs_')) {
+        reloadAllData();
+      }
+      if (e.key === 'thcs_users_v2' || e.key === 'thcs_active_session_token') {
+        const myUser = StorageService.getCurrentUser();
+        if (myUser.role !== 'guest') {
+          const isValid = StorageService.validateSession(myUser);
+          if (!isValid) {
+            StorageService.logoutUser();
+            setCurrentUser(StorageService.getCurrentUser());
+            setSessionConflictData({
+              isOpen: true,
+              userName: myUser.name,
+              userCode: myUser.code,
+              newDevice: myUser.lastLoginDevice || 'Thiết bị khác'
+            });
+          }
+        }
+      }
+    };
+
+    // 4. Listen to multi-device / multi-tab login events to kick out old sessions
+    if (authSessionChannel) {
+      authSessionChannel.onmessage = (event) => {
+        if (event?.data?.type === 'AUTH_LOGIN_NEW_DEVICE') {
+          const { userId, userCode, userName, sessionToken, deviceName } = event.data;
+          const myUser = StorageService.getCurrentUser();
+          const myToken = StorageService.getCurrentSessionToken();
+
+          if (myUser.id === userId && myUser.role !== 'guest' && myToken && myToken !== sessionToken) {
+            StorageService.logoutUser();
+            setCurrentUser(StorageService.getCurrentUser());
+            setSessionConflictData({
+              isOpen: true,
+              userName: userName || myUser.name,
+              userCode: userCode || myUser.code,
+              newDevice: deviceName || 'Thiết bị mới'
+            });
+          }
+        }
+      };
+    }
+
+    // 5. Periodic & focus check for session integrity
+    const checkSessionIntegrity = () => {
+      const myUser = StorageService.getCurrentUser();
+      if (myUser.role !== 'guest') {
+        const isValid = StorageService.validateSession(myUser);
+        if (!isValid) {
+          StorageService.logoutUser();
+          setCurrentUser(StorageService.getCurrentUser());
+          setSessionConflictData({
+            isOpen: true,
+            userName: myUser.name,
+            userCode: myUser.code,
+            newDevice: myUser.lastLoginDevice || 'Thiết bị khác'
+          });
+        }
+      }
+    };
+
+    window.addEventListener('focus', checkSessionIntegrity);
+
+    // 6. Initialize automated cloud sync background loop (periodic pull + window focus + network recovery)
+    const cleanupAutoSync = CloudflareService.initAutoSyncLoop(() => {
+      reloadAllData();
+    });
+
     window.addEventListener('thcs_storage_updated', handleStorageUpdated);
+    window.addEventListener('thcs_remote_storage_updated', handleRemoteStorageUpdated);
+    window.addEventListener('storage', handleStorageEvent);
+
     return () => {
+      cleanupAutoSync();
+      window.removeEventListener('focus', checkSessionIntegrity);
       window.removeEventListener('thcs_storage_updated', handleStorageUpdated);
+      window.removeEventListener('thcs_remote_storage_updated', handleRemoteStorageUpdated);
+      window.removeEventListener('storage', handleStorageEvent);
     };
   }, []);
 
@@ -90,6 +191,12 @@ export function App() {
     if (activeTab === 'students' && !isTeacherToanOrAdmin(user)) {
       setActiveTab('exams');
     }
+  };
+
+  const handleLogout = () => {
+    StorageService.logoutUser();
+    setCurrentUser(StorageService.getCurrentUser());
+    setActiveTab('news');
   };
 
   // --- Backup & Restore handlers ---
@@ -162,6 +269,37 @@ export function App() {
   const handleLikeNews = (id: string) => {
     StorageService.likeNews(id);
     setNews(StorageService.getNews());
+  };
+
+  // --- Content Moderation Handlers (Kiểm duyệt: Thầy Toàn & Admin) ---
+  const handleApproveNews = (id: string) => {
+    StorageService.approveNews(id, currentUser.name);
+    setNews(StorageService.getNews());
+  };
+
+  const handleRejectNews = (id: string, reason: string) => {
+    StorageService.rejectNews(id, reason, currentUser.name);
+    setNews(StorageService.getNews());
+  };
+
+  const handleApproveMaterial = (id: string) => {
+    StorageService.approveMaterial(id, currentUser.name);
+    setMaterials(StorageService.getMaterials());
+  };
+
+  const handleRejectMaterial = (id: string, reason: string) => {
+    StorageService.rejectMaterial(id, reason, currentUser.name);
+    setMaterials(StorageService.getMaterials());
+  };
+
+  const handleApproveExam = (id: string) => {
+    StorageService.approveExam(id, currentUser.name);
+    setExams(StorageService.getExams());
+  };
+
+  const handleRejectExam = (id: string, reason: string) => {
+    StorageService.rejectExam(id, reason, currentUser.name);
+    setExams(StorageService.getExams());
   };
 
   // --- Student User handlers ---
@@ -298,6 +436,9 @@ export function App() {
         onExportData={handleExportData}
         onImportData={handleImportData}
         onOpenCloudflareSync={() => setIsCloudflareModalOpen(true)}
+        onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onOpenChangePasswordModal={() => setIsChangePasswordModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main App Container */}
@@ -312,6 +453,8 @@ export function App() {
             onEditArticle={(art) => setEditingNews(art)}
             onDeleteArticle={handleDeleteNews}
             onLikeArticle={handleLikeNews}
+            onApproveArticle={handleApproveNews}
+            onRejectArticle={handleRejectNews}
             onNavigateToLogin={() => setActiveTab('login')}
           />
         )}
@@ -325,6 +468,8 @@ export function App() {
             onDeleteMaterial={handleDeleteMaterial}
             onIncrementDownload={handleIncrementMaterialDownload}
             onIncrementView={handleIncrementMaterialView}
+            onApproveMaterial={handleApproveMaterial}
+            onRejectMaterial={handleRejectMaterial}
             onNavigateToLogin={() => setActiveTab('login')}
           />
         )}
@@ -340,6 +485,8 @@ export function App() {
             onCreateExam={() => setEditingExam(null)}
             onEditExam={(ex) => setEditingExam(ex)}
             onDeleteExam={handleDeleteExam}
+            onApproveExam={handleApproveExam}
+            onRejectExam={handleRejectExam}
             onNavigateToLogin={() => setActiveTab('login')}
           />
         )}
@@ -372,9 +519,15 @@ export function App() {
             onEditNews={(art) => setEditingNews(art)}
             onDeleteNews={handleDeleteNews}
             onSelectNews={(art) => setSelectedNews(art)}
+            onApproveNews={handleApproveNews}
+            onRejectNews={handleRejectNews}
             onOpenCreateExam={() => setEditingExam(null)}
             onEditExam={(ex) => setEditingExam(ex)}
             onDeleteExam={handleDeleteExam}
+            onApproveExam={handleApproveExam}
+            onRejectExam={handleRejectExam}
+            onApproveMaterial={handleApproveMaterial}
+            onRejectMaterial={handleRejectMaterial}
             onOpenCreateQuestion={() => setEditingQuestion(null)}
             onEditQuestion={(q) => setEditingQuestion(q)}
             onDeleteQuestion={handleDeleteQuestion}
@@ -409,28 +562,12 @@ export function App() {
                 Trang <strong>Quản lý, tạo và chỉnh sửa tài khoản</strong> chỉ hiển thị và cho phép truy cập đối với tài khoản của <strong>Thầy Toàn</strong> hoặc <strong>Quản trị viên (Admin)</strong>.
               </p>
               <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
-                {availableUsers.find(u => u.code === 'GV-TINHOC01' || u.name.includes('Toàn')) && (
-                  <button
-                    onClick={() => {
-                      const toan = availableUsers.find(u => u.code === 'GV-TINHOC01' || u.name.includes('Toàn'));
-                      if (toan) handleUserChange(toan);
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md cursor-pointer"
-                  >
-                    Chuyển sang tài khoản Thầy Toàn
-                  </button>
-                )}
-                {availableUsers.find(u => u.role === 'admin') && (
-                  <button
-                    onClick={() => {
-                      const admin = availableUsers.find(u => u.role === 'admin');
-                      if (admin) handleUserChange(admin);
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-all shadow-md cursor-pointer"
-                  >
-                    Chuyển sang tài khoản Quản trị viên
-                  </button>
-                )}
+                <button
+                  onClick={() => setIsLoginModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>Đăng nhập tài khoản Thầy Toàn / Quản trị viên</span>
+                </button>
                 <button
                   onClick={() => setActiveTab('exams')}
                   className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
@@ -451,6 +588,7 @@ export function App() {
             onNavigateToTab={(t) => setActiveTab(t)}
             onOpenCreateExam={() => setEditingExam(null)}
             onOpenCreateNews={() => setEditingNews(null)}
+            onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
           />
         )}
 
@@ -472,6 +610,7 @@ export function App() {
             exams={exams}
             onViewAttempt={(att) => setViewingAttempt(att)}
             onTakeExam={handleStartExam}
+            onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
           />
         )}
       </main>
@@ -566,6 +705,51 @@ export function App() {
         onClose={() => setIsCloudflareModalOpen(false)}
         onDataChanged={reloadAllData}
       />
+
+      {/* MODAL 8: Cửa Sổ Đăng Nhập & Chuyển Đổi Tài Khoản */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        currentUser={currentUser}
+        users={availableUsers}
+        onLoginUser={handleUserChange}
+      />
+
+      {/* MODAL 9: Đổi Mật Khẩu Tài Khoản */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
+        currentUser={currentUser}
+        onPasswordChanged={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          setAvailableUsers(StorageService.getUsers());
+        }}
+      />
+
+      {/* MODAL 10: Cảnh Báo Trùng Lặp Phiên Đăng Nhập Đa Thiết Bị */}
+      {sessionConflictData?.isOpen && (
+        <SessionConflictModal
+          isOpen={sessionConflictData.isOpen}
+          userName={sessionConflictData.userName}
+          userCode={sessionConflictData.userCode}
+          newDevice={sessionConflictData.newDevice}
+          onAcknowledge={() => {
+            setSessionConflictData(null);
+            setIsLoginModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Floating Auto-Sync Notification Toast */}
+      {syncToast && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900/90 text-white text-xs font-semibold shadow-2xl backdrop-blur-md border border-emerald-500/40 animate-fade-in pointer-events-none">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>{syncToast.message}</span>
+        </div>
+      )}
     </div>
   );
 }

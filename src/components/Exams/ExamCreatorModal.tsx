@@ -23,10 +23,12 @@ import {
   BookOpen,
   ArrowUp,
   ArrowDown,
-  Info
+  Info,
+  ShieldCheck
 } from 'lucide-react';
 import { Exam, Question, Subject, GradeLevel, DifficultyLevel, QuestionType, User } from '../../types';
 import { parseDocxFile, parseExamText } from '../../utils/examWordParser';
+import { isTeacherToanOrAdmin } from '../../utils/authUtils';
 
 interface ExamCreatorModalProps {
   examToEdit?: Exam | null;
@@ -418,6 +420,8 @@ Lời giải: Router hoạt động ở tầng mạng, có bảng định tuyế
       .map(c => c.trim())
       .filter(c => c.length > 0);
 
+    const isModerator = isTeacherToanOrAdmin(currentUser);
+
     const updatedExam: Exam = {
       id: examToEdit?.id || 'exam-' + Date.now(),
       title: title.trim(),
@@ -439,7 +443,10 @@ Lời giải: Router hoạt động ở tầng mạng, có bảng định tuyế
       status: 'active',
       questions: examQuestions,
       createdAt: examToEdit?.createdAt || new Date().toISOString().split('T')[0],
-      createdBy: examToEdit?.createdBy || currentUser.name
+      createdBy: examToEdit?.createdBy || currentUser.name,
+      approvalStatus: isModerator ? 'approved' : 'pending_approval',
+      approvedBy: isModerator ? currentUser.name : undefined,
+      approvedAt: isModerator ? new Date().toISOString() : undefined
     };
 
     onSave(updatedExam);
@@ -474,6 +481,25 @@ Lời giải: Router hoạt động ở tầng mạng, có bảng định tuyế
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto p-5 sm:p-6 space-y-6 flex-1 text-xs">
+          
+          {/* Moderation Notice */}
+          {!isTeacherToanOrAdmin(currentUser) ? (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Quy trình kiểm duyệt đề thi: </span>
+                Đề kiểm tra do giáo viên biên soạn sẽ được chuyển đến hàng đợi phê duyệt của <strong>Thầy Toàn hoặc Quản trị viên (Admin)</strong> trước khi học sinh có thể truy cập làm bài.
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div>
+                <span className="font-bold">Đặc quyền Thầy Toàn / Admin: </span>
+                Đề thi sẽ được tự động kích hoạt và phê duyệt mở phòng thi ngay lập tức.
+              </div>
+            </div>
+          )}
           {/* General Information Section */}
           <div className="space-y-4 bg-slate-50/60 p-4 rounded-xl border border-slate-200">
             <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-2">

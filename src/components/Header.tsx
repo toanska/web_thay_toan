@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   GraduationCap, 
   Newspaper, 
@@ -23,10 +23,13 @@ import {
   Users,
   UserPlus,
   CloudLightning,
-  ShieldCheck
+  ShieldCheck,
+  KeyRound,
+  RefreshCw
 } from 'lucide-react';
 import { User, NotificationItem, NavigationTab } from '../types';
 import { isTeacherToanOrAdmin } from '../utils/authUtils';
+import { CloudflareService } from '../services/cloudflareService';
 
 interface HeaderProps {
   activeTab: NavigationTab;
@@ -40,6 +43,9 @@ interface HeaderProps {
   onExportData: () => void;
   onImportData: (json: string) => void;
   onOpenCloudflareSync?: () => void;
+  onOpenLoginModal?: () => void;
+  onOpenChangePasswordModal?: () => void;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -53,12 +59,59 @@ export const Header: React.FC<HeaderProps> = ({
   onResetData,
   onExportData,
   onImportData,
-  onOpenCloudflareSync
+  onOpenCloudflareSync,
+  onOpenLoginModal,
+  onOpenChangePasswordModal,
+  onLogout
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+
+  const [syncState, setSyncState] = useState<{
+    status: 'idle' | 'syncing' | 'connected' | 'error';
+    isSyncing: boolean;
+    autoSync: boolean;
+    hasWorker: boolean;
+  }>(() => {
+    const cfg = CloudflareService.getConfig();
+    return {
+      status: cfg.status,
+      isSyncing: cfg.status === 'syncing',
+      autoSync: cfg.autoSync && cfg.enabled,
+      hasWorker: !!cfg.workerUrl,
+    };
+  });
+
+  useEffect(() => {
+    const handleSyncStatus = (e: any) => {
+      const cfg = CloudflareService.getConfig();
+      setSyncState({
+        status: cfg.status,
+        isSyncing: e?.detail?.status === 'syncing' || cfg.status === 'syncing',
+        autoSync: cfg.autoSync && cfg.enabled,
+        hasWorker: !!cfg.workerUrl,
+      });
+    };
+
+    const handleConfigUpdated = (e: any) => {
+      const cfg = e.detail || CloudflareService.getConfig();
+      setSyncState({
+        status: cfg.status,
+        isSyncing: cfg.status === 'syncing',
+        autoSync: cfg.autoSync && cfg.enabled,
+        hasWorker: !!cfg.workerUrl,
+      });
+    };
+
+    window.addEventListener('thcs_sync_status_changed', handleSyncStatus);
+    window.addEventListener('thcs_cloudflare_config_updated', handleConfigUpdated);
+    return () => {
+      window.removeEventListener('thcs_sync_status_changed', handleSyncStatus);
+      window.removeEventListener('thcs_cloudflare_config_updated', handleConfigUpdated);
+    };
+  }, []);
 
   const unreadNotifs = notifications.filter(n => !n.read);
   const isAuthorizedToManageStudents = isTeacherToanOrAdmin(currentUser);
@@ -125,12 +178,16 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="hidden sm:block">
                   <div className="font-semibold leading-tight text-white flex items-center gap-1">
                     {currentUser.name}
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-sm bg-amber-400 text-slate-900 font-bold uppercase">
-                      {currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-sm font-bold uppercase ${
+                      currentUser.role === 'guest' ? 'bg-slate-300 text-slate-900' :
+                      currentUser.role === 'student' ? 'bg-amber-400 text-slate-900' :
+                      currentUser.role === 'teacher' ? 'bg-amber-400 text-slate-900' : 'bg-purple-300 text-slate-900'
+                    }`}>
+                      {currentUser.role === 'guest' ? 'Khách' : currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
                     </span>
                   </div>
                   <div className="text-[11px] text-blue-200">
-                    {currentUser.className ? `Lớp ${currentUser.className}` : currentUser.code}
+                    {currentUser.role === 'guest' ? 'Chưa đăng nhập' : currentUser.className ? `Lớp ${currentUser.className}` : currentUser.code}
                   </div>
                 </div>
                 <UserCheck className="w-3.5 h-3.5 text-blue-300" />
@@ -145,48 +202,100 @@ export const Header: React.FC<HeaderProps> = ({
                       <h4 className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</h4>
                       <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
                       <span className={`inline-block mt-0.5 text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase ${
+                        currentUser.role === 'guest' ? 'bg-slate-100 text-slate-700' :
                         currentUser.role === 'student' ? 'bg-sky-100 text-sky-700' :
                         currentUser.role === 'teacher' ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'
                       }`}>
-                        {currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
+                        {currentUser.role === 'guest' ? 'Khách truy cập' : currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
                       </span>
                     </div>
                   </div>
 
                   <div className="p-2 space-y-1">
-                    <button
-                      onClick={() => {
-                        setActiveTab('login');
-                        setShowUserMenu(false);
-                      }}
-                      className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                    >
-                      <LogIn className="w-4 h-4 text-blue-600" />
-                      <span>Đăng nhập tài khoản khác</span>
-                    </button>
-
-                    {isAuthorizedToManageStudents && (
+                    {currentUser.role === 'guest' ? (
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          if (onOpenLoginModal) {
+                            onOpenLoginModal();
+                          } else {
+                            setActiveTab('login');
+                          }
+                        }}
+                        className="w-full px-3 py-2.5 rounded-lg text-left text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 flex items-center gap-2.5 transition-colors cursor-pointer shadow-xs"
+                      >
+                        <LogIn className="w-4 h-4 text-amber-300" />
+                        <span>Đăng nhập hệ thống</span>
+                      </button>
+                    ) : (
                       <>
                         <button
                           onClick={() => {
-                            setActiveTab('admin_portal');
                             setShowUserMenu(false);
+                            if (onOpenChangePasswordModal) {
+                              onOpenChangePasswordModal();
+                            }
                           }}
-                          className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-rose-50 hover:text-rose-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                          className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
                         >
-                          <ShieldCheck className="w-4 h-4 text-rose-600" />
-                          <span>Trang Quản Trị Tổng Hợp</span>
+                          <KeyRound className="w-4 h-4 text-amber-600" />
+                          <span>Đổi mật khẩu tài khoản</span>
                         </button>
+
                         <button
                           onClick={() => {
-                            setActiveTab('students');
                             setShowUserMenu(false);
+                            if (onOpenLoginModal) {
+                              onOpenLoginModal();
+                            } else {
+                              setActiveTab('login');
+                            }
                           }}
-                          className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                          className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-800 flex items-center gap-2.5 transition-colors cursor-pointer"
                         >
-                          <UserPlus className="w-4 h-4 text-emerald-600" />
-                          <span>Quản lý tài khoản</span>
+                          <LogIn className="w-4 h-4 text-blue-600" />
+                          <span>Đăng nhập tài khoản khác</span>
                         </button>
+
+                        {isAuthorizedToManageStudents && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setActiveTab('admin_portal');
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-rose-50 hover:text-rose-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <ShieldCheck className="w-4 h-4 text-rose-600" />
+                              <span>Trang Quản Trị Tổng Hợp</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveTab('students');
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <UserPlus className="w-4 h-4 text-emerald-600" />
+                              <span>Quản lý tài khoản</span>
+                            </button>
+                          </>
+                        )}
+
+                        {onLogout && (
+                          <div className="pt-1 mt-1 border-t border-slate-100">
+                            <button
+                              onClick={() => {
+                                setShowUserMenu(false);
+                                onLogout();
+                              }}
+                              className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-rose-700 hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <LogOut className="w-4 h-4 text-rose-600" />
+                              <span>Đăng xuất tài khoản</span>
+                            </button>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -240,75 +349,101 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Cloudflare Cloud Storage button */}
-            {onOpenCloudflareSync && (
+            {/* Realtime Auto-Sync Cloud Status button - ONLY for Teacher Toan or Admin */}
+            {isAuthorizedToManageStudents && onOpenCloudflareSync && (
               <button
                 onClick={onOpenCloudflareSync}
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/40 text-orange-200 hover:text-white transition-all cursor-pointer shadow-2xs"
-                title="Lưu trữ & Đồng bộ Cloudflare Đám mây (Miễn phí)"
+                className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer shadow-2xs ${
+                  syncState.isSyncing
+                    ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/50 text-amber-200'
+                    : syncState.hasWorker && syncState.autoSync
+                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/50 text-emerald-200'
+                    : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-400/40 text-orange-200'
+                }`}
+                title="Hệ thống tự động đồng bộ thời gian thực với cơ sở dữ liệu (Dành riêng cho Thầy Toàn / Admin)"
               >
-                <CloudLightning className="w-4 h-4 text-orange-400" />
-                <span className="hidden sm:inline font-semibold text-xs text-orange-100">Cloudflare</span>
+                {syncState.isSyncing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+                    <span className="hidden sm:inline font-semibold text-xs text-amber-100">Đang đồng bộ...</span>
+                  </>
+                ) : syncState.hasWorker && syncState.autoSync ? (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <CloudLightning className="w-3.5 h-3.5 text-emerald-300" />
+                    <span className="hidden sm:inline font-semibold text-xs text-emerald-100">Tự động đồng bộ</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudLightning className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="hidden sm:inline font-semibold text-xs text-orange-100">Đồng bộ Cloud</span>
+                  </>
+                )}
               </button>
             )}
 
-            {/* Quick Data Backup / Reset Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => { setShowSettingsMenu(!showSettingsMenu); setShowUserMenu(false); setShowNotifMenu(false); }}
-                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white"
-                title="Quản lý dữ liệu hệ thống"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
+            {/* Quick Data Backup / Reset Dropdown - ONLY for Teacher Toan or Admin */}
+            {isAuthorizedToManageStudents && (
+              <div className="relative">
+                <button
+                  onClick={() => { setShowSettingsMenu(!showSettingsMenu); setShowUserMenu(false); setShowNotifMenu(false); }}
+                  className="p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white cursor-pointer"
+                  title="Quản lý dữ liệu hệ thống (Dành riêng cho Thầy Toàn / Admin)"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
 
-              {showSettingsMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 text-slate-800 z-50">
-                  <div className="px-4 py-2 border-b border-slate-100">
-                    <p className="text-xs font-bold text-slate-800">Dữ liệu & Khôi phục</p>
-                    <p className="text-[11px] text-slate-500">Sao lưu hoặc nạp lại dữ liệu mẫu</p>
-                  </div>
-                  <div className="p-2 space-y-1">
-                    {onOpenCloudflareSync && (
+                {showSettingsMenu && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 text-slate-800 z-50">
+                    <div className="px-4 py-2 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-800">Dữ liệu & Khôi phục</p>
+                      <p className="text-[11px] text-slate-500">Dành cho Thầy Toàn / Quản trị viên</p>
+                    </div>
+                    <div className="p-2 space-y-1">
+                      {onOpenCloudflareSync && (
+                        <button
+                          onClick={() => { onOpenCloudflareSync(); setShowSettingsMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-orange-50 flex items-center space-x-2 text-orange-800 font-medium cursor-pointer"
+                        >
+                          <CloudLightning className="w-4 h-4 text-orange-600" />
+                          <span>Đồng bộ Cloudflare KV (Cloud)</span>
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => { onOpenCloudflareSync(); setShowSettingsMenu(false); }}
-                        className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-orange-50 flex items-center space-x-2 text-orange-800 font-medium"
+                        onClick={() => { onExportData(); setShowSettingsMenu(false); }}
+                        className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-slate-100 flex items-center space-x-2 text-slate-700 cursor-pointer"
                       >
-                        <CloudLightning className="w-4 h-4 text-orange-600" />
-                        <span>Đồng bộ Cloudflare KV (Cloud)</span>
+                        <Download className="w-4 h-4 text-blue-600" />
+                        <span>Xuất sao lưu (JSON)</span>
                       </button>
-                    )}
 
-                    <button
-                      onClick={() => { onExportData(); setShowSettingsMenu(false); }}
-                      className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-slate-100 flex items-center space-x-2 text-slate-700"
-                    >
-                      <Download className="w-4 h-4 text-blue-600" />
-                      <span>Xuất sao lưu (JSON)</span>
-                    </button>
+                      <label className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-slate-100 flex items-center space-x-2 text-slate-700 cursor-pointer">
+                        <Upload className="w-4 h-4 text-emerald-600" />
+                        <span>Nhập dữ liệu (JSON)</span>
+                        <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+                      </label>
 
-                    <label className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-slate-100 flex items-center space-x-2 text-slate-700 cursor-pointer">
-                      <Upload className="w-4 h-4 text-emerald-600" />
-                      <span>Nhập dữ liệu (JSON)</span>
-                      <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
-                    </label>
-
-                    <button
-                      onClick={() => {
-                        if (confirm('Bạn có chắc chắn muốn khôi phục toàn bộ bài kiểm tra, tin tức và câu hỏi về trạng thái mẫu ban đầu?')) {
-                          onResetData();
-                          setShowSettingsMenu(false);
-                        }
-                      }}
-                      className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-rose-50 flex items-center space-x-2 text-rose-600"
-                    >
-                      <RotateCcw className="w-4 h-4 text-rose-600" />
-                      <span>Khôi phục dữ liệu mẫu gốc</span>
-                    </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('Bạn có chắc chắn muốn khôi phục toàn bộ bài kiểm tra, tin tức và câu hỏi về trạng thái mẫu ban đầu?')) {
+                            onResetData();
+                            setShowSettingsMenu(false);
+                          }
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-rose-50 flex items-center space-x-2 text-rose-600 cursor-pointer"
+                      >
+                        <RotateCcw className="w-4 h-4 text-rose-600" />
+                        <span>Khôi phục dữ liệu mẫu gốc</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -386,6 +521,68 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               );
             })}
+
+            <div className="pt-2 border-t border-slate-200 space-y-1.5">
+              {currentUser.role === 'guest' ? (
+                <button
+                  onClick={() => {
+                    setShowMobileNav(false);
+                    if (onOpenLoginModal) {
+                      onOpenLoginModal();
+                    } else {
+                      setActiveTab('login');
+                    }
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-900 hover:bg-blue-800 transition-colors shadow-xs"
+                >
+                  <LogIn className="w-5 h-5 text-amber-300" />
+                  <span>Đăng nhập hệ thống</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowMobileNav(false);
+                      if (onOpenChangePasswordModal) {
+                        onOpenChangePasswordModal();
+                      }
+                    }}
+                    className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 transition-colors"
+                  >
+                    <KeyRound className="w-5 h-5 text-amber-600" />
+                    <span>Đổi mật khẩu tài khoản</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowMobileNav(false);
+                      if (onOpenLoginModal) {
+                        onOpenLoginModal();
+                      } else {
+                        setActiveTab('login');
+                      }
+                    }}
+                    className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+                  >
+                    <LogIn className="w-5 h-5 text-blue-600" />
+                    <span>Đăng nhập tài khoản khác</span>
+                  </button>
+
+                  {onLogout && (
+                    <button
+                      onClick={() => {
+                        setShowMobileNav(false);
+                        onLogout();
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
+                    >
+                      <LogOut className="w-5 h-5 text-rose-600" />
+                      <span>Đăng xuất</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

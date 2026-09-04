@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Save, Sparkles, Image, Tag, Pin, BookOpen } from 'lucide-react';
+import { X, Save, Sparkles, Image, Tag, Pin, BookOpen, Clock, ShieldCheck, AlertCircle } from 'lucide-react';
 import { NewsArticle, User } from '../../types';
+import { isTeacherToanOrAdmin } from '../../utils/authUtils';
 
 interface NewsEditorModalProps {
   articleToEdit?: NewsArticle | null;
@@ -40,6 +41,8 @@ export const NewsEditorModal: React.FC<NewsEditorModalProps> = ({
       .map(t => t.trim())
       .filter(t => t.length > 0);
 
+    const isModerator = isTeacherToanOrAdmin(currentUser);
+
     const updatedArticle: NewsArticle = {
       id: articleToEdit?.id || 'news-' + Date.now(),
       title: title.trim(),
@@ -51,6 +54,7 @@ export const NewsEditorModal: React.FC<NewsEditorModalProps> = ({
       publishedAt: articleToEdit?.publishedAt || new Date().toISOString().split('T')[0],
       authorName: articleToEdit?.authorName || currentUser.name,
       authorTitle: articleToEdit?.authorTitle || (currentUser.role === 'teacher' ? 'Giáo viên bộ môn' : 'Ban Giám Hiệu'),
+      authorRole: currentUser.role,
       views: articleToEdit?.views || 10,
       likes: articleToEdit?.likes || 0,
       isPinned,
@@ -58,7 +62,10 @@ export const NewsEditorModal: React.FC<NewsEditorModalProps> = ({
       attachments: articleToEdit?.attachments || [
         { name: 'Thong_bao_nha_truong.pdf', size: '1.2 MB' }
       ],
-      comments: articleToEdit?.comments || []
+      comments: articleToEdit?.comments || [],
+      approvalStatus: isModerator ? 'approved' : 'pending_approval',
+      approvedBy: isModerator ? currentUser.name : undefined,
+      approvedAt: isModerator ? new Date().toISOString() : undefined
     };
 
     onSave(updatedArticle);
@@ -92,6 +99,25 @@ export const NewsEditorModal: React.FC<NewsEditorModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-4 flex-1">
+          {/* Moderation Workflow Notice */}
+          {!isTeacherToanOrAdmin(currentUser) ? (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Quy trình duyệt bài: </span>
+                Bài viết của giáo viên sau khi lưu sẽ được chuyển đến hàng đợi phê duyệt của <strong>Thầy Toàn hoặc Quản trị viên (Admin)</strong> trước khi phát hành công khai trên hệ thống.
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div>
+                <span className="font-bold">Đặc quyền Thầy Toàn / Admin: </span>
+                Bài viết sẽ được duyệt tự động và đăng tải công khai ngay lập tức.
+              </div>
+            </div>
+          )}
+
           {/* Title */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
