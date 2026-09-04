@@ -497,14 +497,14 @@ export const INITIAL_ATTEMPTS: ExamAttempt[] = [
 export const INITIAL_NEWS: NewsArticle[] = [
   {
     id: 'news-01',
-    title: 'Kế hoạch tổ chức Khảo sát chất lượng Giữa Học kỳ II năm học 2025 - 2026',
+    title: 'Kế hoạch tổ chức Khảo sát chất lượng Giữa Học kỳ I năm học 2026 - 2027',
     slug: 'ke-hoach-khao-sat-chat-luong-giua-ki-2',
     category: 'Thông báo chung',
     summary: 'Ban Giám hiệu nhà trường thông báo kế hoạch chi tiết, lịch thi trực tuyến và trực tiếp cho toàn thể học sinh khối 6, 7, 8, 9.',
-    content: `Trường THCS Nguyễn Du trân trọng thông báo đến toàn thể cán bộ giáo viên, phụ huynh và học sinh kế hoạch khảo sát chất lượng giữa học kỳ II năm học 2025 - 2026 như sau:
+    content: `Trường THCS Nguyễn Du trân trọng thông báo đến toàn thể cán bộ giáo viên, phụ huynh và học sinh kế hoạch khảo sát chất lượng giữa học kỳ I năm học 2026 - 2027 như sau:
 
 1. **Mục đích:**
-- Đánh giá mức độ tiếp thu kiến thức của học sinh theo chương trình GDPT 2018 sau nửa chặng đường của Học kỳ II.
+- Đánh giá mức độ tiếp thu kiến thức của học sinh theo chương trình GDPT 2018 sau nửa chặng đường của Học kỳ I.
 - Giúp giáo viên bộ môn và nhà trường phân loại học sinh, từ đó xây dựng kế hoạch bồi dưỡng nâng cao và phụ đạo kịp thời, đặc biệt là công tác ôn thi vào lớp 10 cho khối 9.
 
 2. **Hình thức thi:**
@@ -611,7 +611,7 @@ Học sinh nên dành 45 phút mỗi ngày làm đề kiểm tra trực tuyến 
     content: `Hưởng ứng phong trào chuyển đổi số trong giáo dục, bộ môn Tin học phát động phong trào "Học tập và Sáng tạo Công nghệ số 2026".
 Mỗi bạn học sinh tích cực tham gia các bài thực hành trực tuyến, rèn luyện tư duy lập trình và sử dụng công nghệ thông tin an toàn, hiệu quả.
 
-Thời gian diễn ra: Xuyên suốt học kỳ II năm học 2025 - 2026.`,
+Thời gian diễn ra: Xuyên suốt học kỳ I năm học 2026 - 2027.`,
     featuredImage: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800&auto=format&fit=crop&q=80',
     publishedAt: '2026-02-22',
     authorName: 'Thầy Toàn',
@@ -637,7 +637,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif-02',
     title: 'Thông báo khảo thí mới',
-    message: 'Ban Giám hiệu vừa ban hành kế hoạch thi Giữa học kỳ II năm học 2025-2026.',
+    message: 'Ban Giám hiệu vừa ban hành kế hoạch thi Giữa học kỳ I năm học 2026-2027.',
     type: 'news',
     timestamp: '2026-02-28 08:00',
     read: true,
@@ -796,7 +796,7 @@ II. Thực hành: Cài đặt và cập nhật phần mềm diệt virus trên W
   },
   {
     id: 'mat-07',
-    title: 'Tài liệu tham khảo: Đề cương ôn tập và Bộ câu hỏi trắc nghiệm Tin học 6 - Học kỳ II',
+    title: 'Tài liệu tham khảo: Đề cương ôn tập và Bộ câu hỏi trắc nghiệm Tin học 6 - Học kỳ I',
     type: 'reference',
     subject: 'Tin học',
     grade: 6,

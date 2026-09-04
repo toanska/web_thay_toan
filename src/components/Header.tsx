@@ -122,14 +122,15 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
     { id: 'score_lookup', label: 'Tra cứu điểm (ID Học sinh)', icon: Search, color: 'text-amber-600' },
     { id: 'admin_portal', label: 'Trang Quản Trị Tổng Hợp', icon: ShieldCheck, color: 'text-rose-600', badge: 'VIP' },
-    { id: 'students', label: 'Quản lý tài khoản', icon: Users, color: 'text-emerald-600', badge: 'Admin' },
     { id: 'reports', label: 'Báo cáo & Phổ điểm', icon: BarChart3, color: 'text-purple-600' },
-    { id: 'login', label: 'Đăng nhập / Phân quyền', icon: Key, color: 'text-blue-600' },
   ];
 
   const navItems = allNavItems.filter(item => {
-    if (item.id === 'admin_portal' || item.id === 'students') {
+    if (item.id === 'admin_portal') {
       return isAuthorizedToManageStudents;
+    }
+    if (item.id === 'reports' && currentUser.role === 'guest') {
+      return false;
     }
     return true;
   });
@@ -477,7 +478,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="hidden lg:flex items-center space-x-3 text-xs text-slate-500 font-medium">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-              Học kỳ II (2025 - 2026)
+              Học kỳ I (2026 - 2027)
             </span>
             <span className="text-slate-300">|</span>
             <span className="text-slate-600 italic">"Tận tâm - Trí tuệ - Khát vọng"</span>
