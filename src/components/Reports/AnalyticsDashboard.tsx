@@ -112,6 +112,25 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
   // Export to CSV
   const handleExportCSV = () => {
+    let examNameSlug = 'Tat_Ca_Bai_Kiem_Tra';
+    if (selectedExamId !== 'all') {
+      const foundExam = exams.find(e => e.id === selectedExamId);
+      if (foundExam) {
+        examNameSlug = foundExam.title.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+      }
+    } else if (filteredAttempts.length > 0) {
+      const firstTitle = filteredAttempts[0].examTitle;
+      const allSame = filteredAttempts.every(a => a.examTitle === firstTitle);
+      if (allSame) {
+        examNameSlug = firstTitle.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+      } else {
+        examNameSlug = 'Nhieu_Bai_Kiem_Tra';
+      }
+    }
+
+    const classSlug = selectedClass !== 'all' ? `_Lop_${selectedClass}` : '';
+    const fileName = `Ket_Qua_${examNameSlug}${classSlug}_${Date.now().toString().slice(-6)}.csv`;
+
     const headers = ['Mã học sinh,Họ và tên,Lớp,Đề kiểm tra,Môn,Điểm số,Xếp loại,Số lần chuyển tab,Thời gian nộp'];
     const rows = filteredAttempts.map(a => {
       const rank = a.score >= 9.0 ? 'Xuất sắc' : a.score >= 8.0 ? 'Giỏi' : a.score >= 6.5 ? 'Khá' : a.score >= 5.0 ? 'Trung bình' : 'Chưa đạt';
@@ -121,7 +140,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Bao_cao_khao_thi_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", fileName);
     document.body.appendChild(link);
     link.click();
     link.remove();
