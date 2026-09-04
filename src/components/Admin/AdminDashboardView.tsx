@@ -76,6 +76,8 @@ interface AdminDashboardViewProps {
   onDeleteQuestion: (id: string) => void;
   onOpenAIGenerator: () => void;
   onViewAttempt: (attempt: ExamAttempt) => void;
+  onDeleteAttempt?: (id: string) => void;
+  onDeleteAttemptsBatch?: (ids: string[]) => void;
   onNavigateToTab: (tab: NavigationTab) => void;
 }
 
@@ -109,12 +111,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onDeleteQuestion,
   onOpenAIGenerator,
   onViewAttempt,
+  onDeleteAttempt,
+  onDeleteAttemptsBatch,
   onNavigateToTab
 }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
   const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [attemptClassFilter, setAttemptClassFilter] = useState<string>('all');
+  const [attemptExamFilter, setAttemptExamFilter] = useState<string>('all');
+  const [selectedAttemptIds, setSelectedAttemptIds] = useState<string[]>([]);
 
   const [rejectingItem, setRejectingItem] = useState<{
     id: string;
@@ -186,15 +193,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   // Filtered attempts
   const filteredAttempts = useMemo(() => {
     return attempts.filter(a => {
-      if (!searchKeyword) return true;
-      const kw = searchKeyword.toLowerCase();
-      return (
-        a.studentName.toLowerCase().includes(kw) ||
-        a.studentCode.toLowerCase().includes(kw) ||
-        a.examTitle.toLowerCase().includes(kw)
-      );
+      const matchClass = attemptClassFilter === 'all' || a.studentClass === attemptClassFilter;
+      const matchExam = attemptExamFilter === 'all' || a.examId === attemptExamFilter;
+      const matchSearch = !searchKeyword || 
+        a.studentName.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        a.studentCode.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        a.examTitle.toLowerCase().includes(searchKeyword.toLowerCase());
+      return matchClass && matchExam && matchSearch;
     });
-  }, [attempts, searchKeyword]);
+  }, [attempts, attemptClassFilter, attemptExamFilter, searchKeyword]);
 
   // Filtered questions
   const filteredQuestions = useMemo(() => {
@@ -985,26 +992,163 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       {/* ================= SECTION: LỊCH SỬ & KẾT QUẢ ================= */}
       {activeSection === 'attempts' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
                 <History className="w-5 h-5 text-emerald-600" />
                 <span>Lịch Sử & Kết Quả Bài Kiểm Tra Của Học Sinh ({filteredAttempts.length})</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Xem chi tiết điểm số, thời gian làm bài, số lần vi phạm tab và bài làm của từng học sinh
+                Lọc theo lớp, tên bài kiểm tra, chọn nhiều học sinh để xóa hoặc xuất báo cáo kết quả chi tiết
               </p>
             </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="Tìm theo tên học sinh, mã HS, đề thi..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600"
-              />
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Filter by Class */}
+              <select
+                value={attemptClassFilter}
+                onChange={(e) => setAttemptClassFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600"
+              >
+                <option value="all">Tất cả các lớp</option>
+                {Array.from(new Set(attempts.map(a => a.studentClass))).filter(Boolean).map(c => (
+                  <option key={c} value={c}>Lớp {c}</option>
+                ))}
+              </select>
+
+              {/* Filter by Exam */}
+              <select
+                value={attemptExamFilter}
+                onChange={(e) => setAttemptExamFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 max-w-[200px]"
+              >
+                <option value="all">Tất cả đề thi</option>
+                {exams.map(ex => (
+                  <option key={ex.id} value={ex.id}>{ex.title}</option>
+                ))}
+              </select>
+
+              {/* Search keyword */}
+              <div className="relative w-full sm:w-56">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder="Tìm học sinh, mã HS..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Batch Actions & Export Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">
+                Đã chọn: <span className="text-blue-600">{selectedAttemptIds.length}</span> bài làm
+              </span>
+              {selectedAttemptIds.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedAttemptIds.length} kết quả bài kiểm tra đã chọn?`)) {
+                      if (onDeleteAttemptsBatch) {
+                        onDeleteAttemptsBatch(selectedAttemptIds);
+                        setSelectedAttemptIds([]);
+                      }
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa các mục đã chọn</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedAttemptIds(filteredAttempts.map(a => a.id));
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors cursor-pointer"
+              >
+                Chọn tất cả ({filteredAttempts.length})
+              </button>
+              {selectedAttemptIds.length > 0 && (
+                <button
+                  onClick={() => setSelectedAttemptIds([])}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors cursor-pointer"
+                >
+                  Bỏ chọn
+                </button>
+              )}
+
+              {/* Export Report Button */}
+              <button
+                onClick={() => {
+                  // Export filtered or selected attempts as CSV report
+                  const dataToExport = selectedAttemptIds.length > 0
+                    ? filteredAttempts.filter(a => selectedAttemptIds.includes(a.id))
+                    : filteredAttempts;
+
+                  if (dataToExport.length === 0) {
+                    alert('Không có dữ liệu kết quả để xuất báo cáo!');
+                    return;
+                  }
+
+                  let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+                  csvContent += "STT,Họ và tên,Mã học sinh,Lớp,Tên bài kiểm tra,Điểm số,Số câu đúng,Tổng số câu,Thời gian làm (giây),Vi phạm tab,Thời gian nộp\n";
+
+                  dataToExport.forEach((att, idx) => {
+                    const row = [
+                      idx + 1,
+                      `"${att.studentName}"`,
+                      `"${att.studentCode}"`,
+                      `"${att.studentClass}"`,
+                      `"${att.examTitle.replace(/"/g, '""')}"`,
+                      att.score.toFixed(1),
+                      att.correctCount,
+                      att.totalQuestions,
+                      att.durationSeconds,
+                      att.tabSwitchCount || 0,
+                      `"${att.submittedAt}"`
+                    ];
+                    csvContent += row.join(",") + "\n";
+                  });
+
+                  let examNameSlug = 'Tat_Ca_Bai_Kiem_Tra';
+                  if (attemptExamFilter !== 'all') {
+                    const foundExam = exams.find(e => e.id === attemptExamFilter);
+                    if (foundExam) {
+                      examNameSlug = foundExam.title.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+                    }
+                  } else if (dataToExport.length > 0) {
+                    const firstTitle = dataToExport[0].examTitle;
+                    const allSame = dataToExport.every(a => a.examTitle === firstTitle);
+                    if (allSame) {
+                      examNameSlug = firstTitle.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+                    } else {
+                      examNameSlug = 'Nhieu_Bai_Kiem_Tra';
+                    }
+                  }
+
+                  const classSlug = attemptClassFilter !== 'all' ? `_Lop_${attemptClassFilter}` : '';
+                  const fileName = `Ket_Qua_${examNameSlug}${classSlug}_${Date.now().toString().slice(-6)}.csv`;
+
+                  const encodedUri = encodeURI(csvContent);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", encodedUri);
+                  link.setAttribute("download", fileName);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Xuất Báo Cáo Excel/CSV ({selectedAttemptIds.length > 0 ? selectedAttemptIds.length : filteredAttempts.length})</span>
+              </button>
             </div>
           </div>
 
@@ -1012,62 +1156,115 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
                 <tr>
+                  <th className="px-4 py-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredAttempts.length > 0 && selectedAttemptIds.length === filteredAttempts.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedAttemptIds(filteredAttempts.map(a => a.id));
+                        } else {
+                          setSelectedAttemptIds([]);
+                        }
+                      }}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-4 py-3">Học sinh</th>
                   <th className="px-4 py-3">Đề thi</th>
                   <th className="px-4 py-3">Điểm số</th>
                   <th className="px-4 py-3">Đúng / Tổng</th>
                   <th className="px-4 py-3">Thời gian làm</th>
                   <th className="px-4 py-3">Vi phạm</th>
-                  <th className="px-4 py-3 text-right">Chi tiết</th>
+                  <th className="px-4 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredAttempts.map(att => {
-                  const isPassed = att.score >= 5.0;
-                  return (
-                    <tr key={att.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-900">{att.studentName}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">
-                          {att.studentCode} • Lớp {att.studentClass}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-800">
-                        {att.examTitle}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2.5 py-1 rounded-lg font-bold font-mono text-xs ${
-                          isPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {att.score.toFixed(1)} / 10
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-slate-600">
-                        {att.correctCount} / {att.totalQuestions}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">
-                        {Math.floor(att.durationSeconds / 60)} phút {att.durationSeconds % 60}s
-                      </td>
-                      <td className="px-4 py-3">
-                        {att.tabSwitchCount && att.tabSwitchCount > 0 ? (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                            {att.tabSwitchCount} lần đổi tab
+                {filteredAttempts.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                      Không tìm thấy kết quả bài kiểm tra nào phù hợp với bộ lọc.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAttempts.map(att => {
+                    const isPassed = att.score >= 5.0;
+                    const isSelected = selectedAttemptIds.includes(att.id);
+                    return (
+                      <tr key={att.id} className={`hover:bg-slate-50/80 transition-colors ${isSelected ? 'bg-blue-50/50' : ''}`}>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAttemptIds([...selectedAttemptIds, att.id]);
+                              } else {
+                                setSelectedAttemptIds(selectedAttemptIds.filter(id => id !== att.id));
+                              }
+                            }}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900">{att.studentName}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">
+                            {att.studentCode} • Lớp {att.studentClass}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {att.examTitle}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2.5 py-1 rounded-lg font-bold font-mono text-xs ${
+                            isPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {att.score.toFixed(1)} / 10
                           </span>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">Không</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => onViewAttempt(att)}
-                          className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs transition-colors cursor-pointer"
-                        >
-                          Xem bài làm
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-slate-600">
+                          {att.correctCount} / {att.totalQuestions}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500">
+                          {Math.floor(att.durationSeconds / 60)} phút {att.durationSeconds % 60}s
+                        </td>
+                        <td className="px-4 py-3">
+                          {att.tabSwitchCount && att.tabSwitchCount > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                              {att.tabSwitchCount} lần đổi tab
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[11px]">Không</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => onViewAttempt(att)}
+                              className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs transition-colors cursor-pointer"
+                              title="Xem chi tiết bài làm"
+                            >
+                              Xem
+                            </button>
+                            {onDeleteAttempt && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Bạn có chắc chắn muốn xóa kết quả bài làm của học sinh ${att.studentName}?`)) {
+                                    onDeleteAttempt(att.id);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold transition-colors cursor-pointer"
+                                title="Xóa kết quả"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

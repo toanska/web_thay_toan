@@ -392,6 +392,16 @@ export function App() {
     setActiveExam(exam);
   };
 
+  const handleDeleteAttempt = (id: string) => {
+    StorageService.deleteAttempt(id);
+    setAttempts(StorageService.getAttempts());
+  };
+
+  const handleDeleteAttemptsBatch = (ids: string[]) => {
+    StorageService.deleteAttemptsBatch(ids);
+    setAttempts(StorageService.getAttempts());
+  };
+
   const handleFinishExamAttempt = (attempt: ExamAttempt) => {
     StorageService.saveAttempt(attempt);
     setAttempts(StorageService.getAttempts());
@@ -534,6 +544,8 @@ export function App() {
             onDeleteQuestion={handleDeleteQuestion}
             onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
             onViewAttempt={(att) => setViewingAttempt(att)}
+            onDeleteAttempt={handleDeleteAttempt}
+            onDeleteAttemptsBatch={handleDeleteAttemptsBatch}
             onNavigateToTab={(tab) => setActiveTab(tab)}
           />
         )}

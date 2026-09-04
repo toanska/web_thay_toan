@@ -281,6 +281,16 @@ export const StorageService = {
     return this.getAttempts().filter(a => a.studentId === studentId);
   },
 
+  deleteAttempt(id: string): void {
+    const attempts = this.getAttempts().filter(a => a.id !== id);
+    setItem(STORAGE_KEYS.ATTEMPTS, attempts);
+  },
+
+  deleteAttemptsBatch(ids: string[]): void {
+    const attempts = this.getAttempts().filter(a => !ids.includes(a.id));
+    setItem(STORAGE_KEYS.ATTEMPTS, attempts);
+  },
+
   // News
   getNews(): NewsArticle[] {
     const raw = getItem<NewsArticle[]>(STORAGE_KEYS.NEWS, INITIAL_NEWS);
