@@ -55,6 +55,7 @@ interface AdminDashboardViewProps {
   exams: Exam[];
   attempts: ExamAttempt[];
   questions: Question[];
+  initialSection?: AdminSection;
   // Handlers
   onSaveUser: (user: User) => void;
   onDeleteUser: (id: string) => void;
@@ -91,6 +92,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   exams,
   attempts,
   questions,
+  initialSection = 'overview',
   onSaveUser,
   onDeleteUser,
   onOpenCreateNews,
@@ -115,7 +117,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onDeleteAttemptsBatch,
   onNavigateToTab
 }) => {
-  const [activeSection, setActiveSection] = useState<AdminSection>('overview');
+  const [activeSection, setActiveSection] = useState<AdminSection>(initialSection);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
   const [filterGrade, setFilterGrade] = useState<string>('all');

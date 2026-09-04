@@ -25,7 +25,8 @@ import {
   CloudLightning,
   ShieldCheck,
   KeyRound,
-  RefreshCw
+  RefreshCw,
+  History
 } from 'lucide-react';
 import { User, NotificationItem, NavigationTab } from '../types';
 import { isTeacherToanOrAdmin } from '../utils/authUtils';
@@ -121,6 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'materials', label: 'Bài giảng & Giáo án', icon: BookOpen, color: 'text-teal-600', badge: 'Mới' },
     { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
     { id: 'score_lookup', label: 'Tra cứu điểm (ID Học sinh)', icon: Search, color: 'text-amber-600' },
+    { id: 'attempts', label: 'Lịch sử & Kết quả', icon: History, color: 'text-emerald-600', badge: 'Quản lý' },
     { id: 'admin_portal', label: 'Trang Quản Trị Tổng Hợp', icon: ShieldCheck, color: 'text-rose-600', badge: 'VIP' },
     { id: 'students', label: 'Quản lý tài khoản', icon: Users, color: 'text-emerald-600', badge: 'Admin' },
     { id: 'reports', label: 'Báo cáo & Phổ điểm', icon: BarChart3, color: 'text-purple-600' },
@@ -128,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   const navItems = allNavItems.filter(item => {
-    if (item.id === 'admin_portal' || item.id === 'students') {
+    if (item.id === 'admin_portal' || item.id === 'students' || item.id === 'attempts') {
       return isAuthorizedToManageStudents;
     }
     return true;

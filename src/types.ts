@@ -216,6 +216,7 @@ export type NavigationTab =
   | 'exams' 
   | 'score_lookup' 
   | 'admin_portal'
+  | 'attempts'
   | 'students'
   | 'login' 
   | 'reports' 
