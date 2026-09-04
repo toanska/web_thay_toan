@@ -169,8 +169,92 @@ export const ExamList: React.FC<ExamListProps> = ({
         </div>
       </div>
 
-      {/* Filter Control Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+      {/* Authentication Requirement Gate for Guests */}
+      {currentUser.role === 'guest' ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 sm:p-12 text-center space-y-6 max-w-3xl mx-auto my-4 animate-in fade-in zoom-in-95">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-500/20 ring-8 ring-blue-50">
+            <Lock className="w-8 h-8 stroke-[2.2]" />
+          </div>
+
+          <div className="space-y-2 max-w-xl mx-auto">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-900 border border-blue-200 text-xs font-bold">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+              Yêu Cầu Xác Thực Danh Tính Thí Sinh
+            </div>
+            <h3 className="text-2xl font-extrabold text-slate-900 font-serif">
+              Đăng Nhập Học Sinh Để Xem Đề & Làm Bài Kiểm Tra
+            </h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Học sinh cần đăng nhập bằng <strong>Mã học sinh / Số báo danh</strong> để hệ thống hiển thị danh sách đề kiểm tra theo khối lớp, ghi nhận thời gian làm bài, tự động chấm điểm và lưu trữ toàn bộ dữ liệu bài thi.
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={onNavigateToLogin}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Đăng Nhập Học Sinh / Giáo Viên Ngay</span>
+            </button>
+          </div>
+
+          {/* 3 Benefit Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left pt-6 border-t border-slate-100">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs">
+                1
+              </div>
+              <h4 className="font-bold text-slate-900 text-xs">Nhận diện Thí sinh & SBD</h4>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Tự động điền họ tên, mã học sinh và lớp theo danh sách kiểm tra chính thức của nhà trường.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                2
+              </div>
+              <h4 className="font-bold text-slate-900 text-xs">Lưu trữ Toàn bộ Kết quả</h4>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Tự động lưu điểm, thời gian làm bài, đáp án từng câu hỏi và lời giải chi tiết của giáo viên.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold text-xs">
+                3
+              </div>
+              <h4 className="font-bold text-slate-900 text-xs">Phân tích Lời giải & Tiến độ</h4>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Xem lại bài làm bất kỳ lúc nào tại mục Tra Cứu Điểm để ôn tập củng cố kiến thức trọng tâm.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Authenticated Student Profile Bar */}
+          {currentUser.role === 'student' && (
+            <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs">
+                  {currentUser.name.charAt(0)}
+                </div>
+                <div>
+                  <span className="text-slate-500 text-[11px] block">Thí sinh đang tham gia phòng thi:</span>
+                  <span className="font-bold text-slate-900 text-sm">{currentUser.name}</span>
+                  <span className="text-slate-600 ml-2">Lớp: <strong>{currentUser.className || '9A1'}</strong> • SBD: <strong className="font-mono">{currentUser.code}</strong></span>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Đã xác thực thí sinh
+              </span>
+            </div>
+          )}
+
+          {/* Filter Control Bar */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
         {/* Moderation tabs (if moderator) */}
         {isModerator && (
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100 overflow-x-auto">
@@ -529,7 +613,10 @@ export const ExamList: React.FC<ExamListProps> = ({
             })}
           </div>
         )}
-      </div>
+        </div>
+        </>
+      )}
+
       {/* Reject Modal for Exam */}
       {rejectExamTarget && (
         <RejectModal

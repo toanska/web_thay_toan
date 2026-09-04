@@ -497,6 +497,7 @@ export function App() {
             attempts={attempts}
             users={availableUsers}
             exams={exams}
+            currentUser={currentUser}
             onViewAttempt={(att) => setViewingAttempt(att)}
             onTakeExam={handleStartExam}
             onNavigateToLogin={() => setActiveTab('login')}

@@ -77,6 +77,12 @@ export interface Exam {
 
 export interface QuestionResult {
   questionId: string;
+  questionCode?: string;
+  questionText?: string;
+  questionType?: QuestionType;
+  options?: string[];
+  correctAnswers?: any[];
+  explanation?: string;
   studentAnswer: any; // index, array of indices, or string
   isCorrect: boolean;
   pointsAwarded: number;
@@ -87,6 +93,7 @@ export interface QuestionResult {
 export interface ExamAttempt {
   id: string;
   examId: string;
+  examCode?: string;
   examTitle: string;
   subject: Subject;
   grade: GradeLevel;
@@ -103,10 +110,16 @@ export interface ExamAttempt {
   percentage: number;
   passed: boolean;
   tabSwitchCount: number;
+  totalQuestions?: number;
+  correctAnswersCount?: number;
+  wrongAnswersCount?: number;
+  unansweredCount?: number;
   questionResults: QuestionResult[];
   essayGraded?: boolean;
   submittedAt: string;
   feedback?: string;
+  deviceInfo?: string;
+  submitType?: 'manual' | 'timeout';
 }
 
 export interface Comment {

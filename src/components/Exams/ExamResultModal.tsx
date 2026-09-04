@@ -131,13 +131,21 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
           </div>
 
           {/* Stat Badges */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
               <div>
-                <span className="text-emerald-700 font-semibold block text-[11px]">Số câu chính xác</span>
+                <span className="text-emerald-700 font-semibold block text-[11px]">Đúng</span>
                 <strong className="text-lg font-black text-emerald-900">{correctCount} / {totalCount}</strong>
               </div>
               <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between">
+              <div>
+                <span className="text-rose-700 font-semibold block text-[11px]">Sai / Bỏ trống</span>
+                <strong className="text-lg font-black text-rose-900">{totalCount - correctCount} câu</strong>
+              </div>
+              <XCircle className="w-6 h-6 text-rose-600" />
             </div>
 
             <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
@@ -150,9 +158,9 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
               <div>
-                <span className="text-slate-500 font-semibold block text-[11px]">Ghi nhận giám thị</span>
-                <strong className={`text-sm font-bold ${attempt.tabSwitchCount > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
-                  {attempt.tabSwitchCount === 0 ? 'Trung thực (0 lần)' : `${attempt.tabSwitchCount} lần đổi tab`}
+                <span className="text-slate-500 font-semibold block text-[11px]">Giám thị</span>
+                <strong className={`text-xs font-bold ${attempt.tabSwitchCount > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                  {attempt.tabSwitchCount === 0 ? 'Chuẩn mực (0)' : `${attempt.tabSwitchCount} lần đổi tab`}
                 </strong>
               </div>
               <ShieldAlert className={`w-6 h-6 ${attempt.tabSwitchCount > 0 ? 'text-rose-500' : 'text-slate-400'}`} />
@@ -163,7 +171,7 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
           {attempt.feedback && (
             <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-1">
               <span className="font-bold flex items-center gap-1 text-amber-800">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" /> Nhận xét & Đánh giá của giáo viên:
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" /> Nhận xét & Đánh giá năng lực:
               </span>
               <p className="italic text-slate-700">{attempt.feedback}</p>
             </div>
@@ -173,17 +181,22 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
           <div className="space-y-4 pt-2">
             <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-blue-600" />
-              Chi Tiết Bài Làm & Lời Giải Hướng Dẫn ({attempt.questionResults.length} câu)
+              Chi Tiết Toàn Bộ Bài Làm & Lời Giải Hướng Dẫn ({attempt.questionResults.length} câu)
             </h3>
 
             <div className="space-y-4">
               {attempt.questionResults.map((result, idx) => {
                 const questionObj = exam?.questions.find(q => q.id === result.questionId);
                 const isCorrect = result.isCorrect;
+                const content = result.questionText || questionObj?.content || `Câu hỏi #${idx + 1}`;
+                const options = result.options || questionObj?.options;
+                const correctAnswers = result.correctAnswers || questionObj?.correctAnswers || [];
+                const explanation = result.explanation || questionObj?.explanation;
+                const qType = result.questionType || questionObj?.type || 'multiple_choice';
 
                 return (
                   <div
-                    key={result.questionId}
+                    key={result.questionId || idx}
                     className={`p-4 sm:p-5 rounded-xl border-2 space-y-3 transition-all ${
                       isCorrect ? 'border-emerald-200 bg-emerald-50/20' : 'border-rose-200 bg-rose-50/20'
                     }`}
@@ -214,15 +227,20 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
 
                     {/* Question Content */}
                     <div className="text-sm text-slate-900 font-medium leading-relaxed">
-                      {questionObj?.content || `Câu hỏi #${idx + 1}`}
+                      {content}
                     </div>
 
                     {/* Options Breakdown */}
-                    {questionObj?.options && (
+                    {options && options.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-                        {questionObj.options.map((opt, optIdx) => {
-                          const isStudentSelected = result.studentAnswer === optIdx;
-                          const isCorrectOption = questionObj.correctAnswers.includes(optIdx);
+                        {options.map((opt, optIdx) => {
+                          let isStudentSelected = false;
+                          if (Array.isArray(result.studentAnswer)) {
+                            isStudentSelected = result.studentAnswer.includes(optIdx);
+                          } else {
+                            isStudentSelected = result.studentAnswer === optIdx;
+                          }
+                          const isCorrectOption = correctAnswers.includes(optIdx);
                           const letter = String.fromCharCode(65 + optIdx);
 
                           let style = 'border-slate-200 bg-white text-slate-700';
@@ -240,8 +258,13 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                               </span>
                               <span className="truncate">{opt}</span>
                               {isStudentSelected && (
-                                <span className="text-[10px] ml-auto px-1 rounded-sm bg-slate-200 text-slate-800">
-                                  Bạn chọn
+                                <span className="text-[10px] ml-auto px-1.5 py-0.5 rounded-sm bg-blue-100 text-blue-900 font-bold shrink-0">
+                                  Học sinh chọn
+                                </span>
+                              )}
+                              {isCorrectOption && (
+                                <span className="text-[10px] ml-auto px-1.5 py-0.5 rounded-sm bg-emerald-200 text-emerald-900 font-bold shrink-0">
+                                  Đáp án đúng
                                 </span>
                               )}
                             </div>
@@ -251,30 +274,30 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                     )}
 
                     {/* Fill in & Essay Answers */}
-                    {(!questionObj?.options || questionObj.type === 'fill_in' || questionObj.type === 'essay') && (
+                    {(!options || qType === 'fill_in' || qType === 'essay') && (
                       <div className="space-y-1.5 text-xs">
                         <div className="p-2.5 rounded-lg bg-white border border-slate-200">
-                          <span className="text-slate-400 block text-[11px]">Câu trả lời của bạn:</span>
-                          <strong className="text-slate-800">{String(result.studentAnswer || '(Không có câu trả lời)')}</strong>
+                          <span className="text-slate-400 block text-[11px]">Câu trả lời của học sinh:</span>
+                          <strong className="text-slate-800">{String(result.studentAnswer ?? '(Chưa trả lời)')}</strong>
                         </div>
-                        {questionObj?.correctAnswers && (
+                        {correctAnswers && correctAnswers.length > 0 && (
                           <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900">
                             <span className="text-emerald-700 block text-[11px] font-semibold">Đáp án chuẩn / Hướng dẫn chấm:</span>
-                            <strong>{questionObj.correctAnswers.join(' hoặc ')}</strong>
+                            <strong>{correctAnswers.join(' hoặc ')}</strong>
                           </div>
                         )}
                       </div>
                     )}
 
                     {/* Teacher Explanation */}
-                    {questionObj?.explanation && (
+                    {explanation && (
                       <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1">
                         <p className="font-bold flex items-center gap-1">
                           <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
                           Hướng dẫn giải chi tiết:
                         </p>
                         <p className="leading-relaxed text-slate-800 font-normal">
-                          {questionObj.explanation}
+                          {explanation}
                         </p>
                       </div>
                     )}

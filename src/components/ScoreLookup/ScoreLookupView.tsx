@@ -24,6 +24,7 @@ interface ScoreLookupViewProps {
   attempts: ExamAttempt[];
   users: User[];
   exams: Exam[];
+  currentUser?: User;
   onViewAttempt: (attempt: ExamAttempt) => void;
   onTakeExam?: (exam: Exam) => void;
   onNavigateToLogin?: () => void;
@@ -33,13 +34,14 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
   attempts,
   users,
   exams,
+  currentUser,
   onViewAttempt,
   onTakeExam,
   onNavigateToLogin
 }) => {
-  // Default to first student with attempts or empty
-  const [searchCode, setSearchCode] = useState('HS-20240901');
-  const [activeQuery, setActiveQuery] = useState('HS-20240901');
+  const initialCode = currentUser?.role === 'student' ? currentUser.code : 'HS-20240901';
+  const [searchCode, setSearchCode] = useState(initialCode);
+  const [activeQuery, setActiveQuery] = useState(initialCode);
   const [selectedSubject, setSelectedSubject] = useState<string>('Tất cả');
 
   // Find all student users

@@ -19,7 +19,8 @@ import { Exam, Question, ExamAttempt, User, QuestionResult } from '../../types';
 interface ExamTakingProps {
   exam: Exam;
   currentUser: User;
-  onFinishExam: (attempt: ExamAttempt) => void;
+  onFinishExam?: (attempt: ExamAttempt) => void;
+  onFinishAttempt?: (attempt: ExamAttempt) => void;
   onCancel: () => void;
 }
 
@@ -27,6 +28,7 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
   exam,
   currentUser,
   onFinishExam,
+  onFinishAttempt,
   onCancel
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -38,6 +40,11 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
   const [showCheatWarning, setShowCheatWarning] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const dispatchFinish = useCallback((attempt: ExamAttempt) => {
+    if (onFinishExam) onFinishExam(attempt);
+    else if (onFinishAttempt) onFinishAttempt(attempt);
+  }, [onFinishExam, onFinishAttempt]);
 
   // Anti-cheat tab switch listener
   useEffect(() => {
@@ -69,7 +76,7 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
   }, []);
 
   // Compute final score & question results
-  const calculateResult = useCallback((): ExamAttempt => {
+  const calculateResult = useCallback((submitType: 'manual' | 'timeout' = 'manual'): ExamAttempt => {
     let earnedPoints = 0;
     const totalMaxPoints = exam.questions.reduce((acc, q) => acc + (q.points || 1.0), 0);
     const questionResults: QuestionResult[] = [];
@@ -114,10 +121,17 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
       earnedPoints += awarded;
       questionResults.push({
         questionId: q.id,
-        studentAnswer: studentAns ?? null,
+        questionCode: q.code,
+        questionText: q.content,
+        questionType: q.type,
+        options: q.options ? [...q.options] : undefined,
+        correctAnswers: q.correctAnswers ? [...q.correctAnswers] : undefined,
+        explanation: q.explanation || '',
+        studentAnswer: studentAns !== undefined ? studentAns : null,
         isCorrect,
         pointsAwarded: Math.round(awarded * 100) / 100,
-        maxPoints: maxPts
+        maxPoints: maxPts,
+        teacherFeedback: isCorrect ? 'Chính xác' : 'Cần ôn lại kiến thức phần này'
       });
     });
 
@@ -128,9 +142,15 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
     const endTime = new Date().toISOString();
     const durationSeconds = exam.durationMinutes * 60 - timeLeftSeconds;
 
+    const correctCount = questionResults.filter(q => q.isCorrect).length;
+    const answeredCount = questionResults.filter(q => q.studentAnswer !== null && q.studentAnswer !== undefined).length;
+    const wrongCount = answeredCount - correctCount;
+    const unansweredCount = questionResults.length - answeredCount;
+
     return {
-      id: 'attempt-' + Date.now(),
+      id: `attempt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       examId: exam.id,
+      examCode: exam.code,
       examTitle: exam.title,
       subject: exam.subject,
       grade: exam.grade,
@@ -140,20 +160,28 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
       studentCode: currentUser.code,
       startTime,
       endTime,
-      durationSeconds: Math.max(durationSeconds, 10),
-      answers,
+      durationSeconds: Math.max(durationSeconds, 5),
+      answers: { ...answers },
       score: scaledScore,
       maxScore: exam.maxScore,
       percentage,
       passed,
       tabSwitchCount,
+      totalQuestions: exam.questions.length,
+      correctAnswersCount: correctCount,
+      wrongAnswersCount: Math.max(wrongCount, 0),
+      unansweredCount,
       questionResults,
       submittedAt: endTime,
       feedback: scaledScore >= 8.5 
-        ? 'Kết quả tuyệt vời! Nắm vững kiến thức trọng tâm.'
+        ? 'Kết quả xuất sắc! Em đã nắm rất vững kiến thức và kỹ năng của bài kiểm tra.'
         : scaledScore >= 6.5 
-        ? 'Làm bài khá tốt. Cần rèn luyện thêm một số câu vận dụng.'
-        : 'Cần xem lại lời giải chi tiết và ôn tập thêm các dạng bài sai.'
+        ? 'Làm bài khá tốt! Hãy xem lại các câu trả lời chưa chính xác để hoàn thiện hơn.'
+        : scaledScore >= 5.0
+        ? 'Đạt yêu cầu cơ bản. Cần dành thêm thời gian ôn tập lại lý thuyết và các dạng bài tập trọng tâm.'
+        : 'Chưa đạt yêu cầu. Em cần xem kỹ lời giải chi tiết và liên hệ Thầy Toàn để được hướng dẫn thêm.',
+      deviceInfo: typeof navigator !== 'undefined' ? `${navigator.userAgent.slice(0, 80)}` : 'Web',
+      submitType
     };
   }, [answers, currentUser, exam, startTime, tabSwitchCount, timeLeftSeconds]);
 
@@ -161,8 +189,8 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
   useEffect(() => {
     if (timeLeftSeconds <= 0) {
       // Auto submit on time out
-      const attempt = calculateResult();
-      onFinishExam(attempt);
+      const attempt = calculateResult('timeout');
+      dispatchFinish(attempt);
       return;
     }
 
@@ -171,14 +199,14 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeftSeconds, calculateResult, onFinishExam]);
+  }, [timeLeftSeconds, calculateResult, dispatchFinish]);
 
   const handleFinalSubmit = () => {
     setIsSubmitting(true);
-    const attempt = calculateResult();
+    const attempt = calculateResult('manual');
     setTimeout(() => {
-      onFinishExam(attempt);
-    }, 400);
+      dispatchFinish(attempt);
+    }, 300);
   };
 
   const currentQ = exam.questions[currentQuestionIndex];
