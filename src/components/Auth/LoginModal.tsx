@@ -104,7 +104,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 Đăng Nhập Tài Khoản Khác
               </h3>
               <p className="text-xs text-blue-200">
-                Hệ thống Quản trị & Khảo thí - THCS Nguyễn Du
+                Hệ thống Quản trị & Khảo thí - THCS Ngô Quyền
               </p>
             </div>
           </div>

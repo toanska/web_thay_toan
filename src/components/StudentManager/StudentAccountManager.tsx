@@ -116,7 +116,7 @@ export const StudentAccountManager: React.FC<StudentAccountManagerProps> = ({
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formAvatar, setFormAvatar] = useState(DEFAULT_AVATARS[0]);
-  const [formSchool, setFormSchool] = useState('Trường THCS Nguyễn Du');
+  const [formSchool, setFormSchool] = useState('Trường THCS Ngô Quyền');
 
   // Batch Form States
   const [batchClass, setBatchClass] = useState('9A1');
@@ -168,7 +168,7 @@ Bùi Thảo Nhi`
     setFormEmail('');
     setFormPhone('');
     setFormAvatar(DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)]);
-    setFormSchool('Trường THCS Nguyễn Du');
+    setFormSchool('Trường THCS Ngô Quyền');
     setShowCreateModal(true);
   };
 
@@ -181,7 +181,7 @@ Bùi Thảo Nhi`
     setFormEmail(student.email);
     setFormPhone(student.phone || '');
     setFormAvatar(student.avatar);
-    setFormSchool(student.school || 'Trường THCS Nguyễn Du');
+    setFormSchool(student.school || 'Trường THCS Ngô Quyền');
     setShowCreateModal(true);
   };
 
@@ -223,7 +223,7 @@ Bùi Thảo Nhi`
       avatar: formAvatar,
       email: finalEmail.toLowerCase(),
       phone: formPhone.trim() || undefined,
-      school: formSchool.trim() || 'Trường THCS Nguyễn Du',
+      school: formSchool.trim() || 'Trường THCS Ngô Quyền',
     };
 
     onSaveUser(newOrUpdatedUser);
@@ -267,7 +267,7 @@ Bùi Thảo Nhi`
         grade: batchGrade,
         avatar,
         email,
-        school: 'Trường THCS Nguyễn Du'
+        school: 'Trường THCS Ngô Quyền'
       };
     });
 
@@ -307,7 +307,7 @@ Bùi Thảo Nhi`
           grade: batchGrade,
           avatar,
           email,
-          school: 'Trường THCS Nguyễn Du'
+          school: 'Trường THCS Ngô Quyền'
         };
       });
       setBatchPreview(generated);

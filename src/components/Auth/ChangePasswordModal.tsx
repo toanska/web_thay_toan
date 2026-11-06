@@ -289,7 +289,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
           <span className="flex items-center gap-1.5 text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            Bảo mật tài khoản THCS Nguyễn Du
+            Bảo mật tài khoản THCS Ngô Quyền
           </span>
           <button
             type="button"

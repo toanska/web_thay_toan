@@ -118,14 +118,14 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
         code: activeStudent.code,
         className: activeStudent.className || 'Chưa phân lớp',
         avatar: activeStudent.avatar,
-        school: activeStudent.school || 'Trường THCS Nguyễn Du'
+        school: activeStudent.school || 'Trường THCS Ngô Quyền'
       };
     } else if (matchingAttempts.length > 0 && candidateStudents.length <= 1) {
       studentInfo = {
         name: matchingAttempts[0].studentName,
         code: matchingAttempts[0].studentCode,
         className: matchingAttempts[0].studentClass,
-        school: 'Trường THCS Nguyễn Du'
+        school: 'Trường THCS Ngô Quyền'
       };
     }
 

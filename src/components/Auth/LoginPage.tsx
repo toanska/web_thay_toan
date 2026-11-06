@@ -253,7 +253,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-blue-900">
                 <span className="font-bold block mb-1">Hỗ trợ kỹ thuật phòng máy</span>
-                Thầy Toàn - Phụ trách Tin học & Khảo thí THCS Nguyễn Du.
+                Thầy Toàn - Phụ trách Tin học & Khảo thí THCS Ngô Quyền.
               </div>
             </div>
           </div>

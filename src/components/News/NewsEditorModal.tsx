@@ -27,7 +27,7 @@ export const NewsEditorModal: React.FC<NewsEditorModalProps> = ({
   const [content, setContent] = useState(articleToEdit?.content || '');
   const [featuredImage, setFeaturedImage] = useState(articleToEdit?.featuredImage || 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=800&auto=format&fit=crop&q=80');
   const [isPinned, setIsPinned] = useState(articleToEdit?.isPinned ?? false);
-  const [tagInput, setTagInput] = useState(articleToEdit?.tags.join(', ') || 'THCS Nguyễn Du, Khảo thí, Thông báo');
+  const [tagInput, setTagInput] = useState(articleToEdit?.tags.join(', ') || 'THCS Ngô Quyền, Khảo thí, Thông báo');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
