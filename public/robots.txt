@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://main.thcsngoquyenit.gt.tc/sitemap.xml
