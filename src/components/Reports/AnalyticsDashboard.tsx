@@ -112,23 +112,34 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
   // Export to CSV
   const handleExportCSV = () => {
+    const sanitizeFilename = (str: string) => {
+      return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/[^a-zA-Z0-9\s_-]/g, '')
+        .trim()
+        .replace(/\s+/g, '_');
+    };
+
     let examNameSlug = 'Tat_Ca_Bai_Kiem_Tra';
     if (selectedExamId !== 'all') {
       const foundExam = exams.find(e => e.id === selectedExamId);
       if (foundExam) {
-        examNameSlug = foundExam.title.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+        examNameSlug = sanitizeFilename(foundExam.title);
       }
     } else if (filteredAttempts.length > 0) {
       const firstTitle = filteredAttempts[0].examTitle;
       const allSame = filteredAttempts.every(a => a.examTitle === firstTitle);
       if (allSame) {
-        examNameSlug = firstTitle.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+        examNameSlug = sanitizeFilename(firstTitle);
       } else {
         examNameSlug = 'Nhieu_Bai_Kiem_Tra';
       }
     }
 
-    const classSlug = selectedClass !== 'all' ? `_Lop_${selectedClass}` : '';
+    const classSlug = selectedClass !== 'all' ? `_Lop_${sanitizeFilename(selectedClass)}` : '';
     const fileName = `Ket_Qua_${examNameSlug}${classSlug}_${Date.now().toString().slice(-6)}.csv`;
 
     const headers = ['Mã học sinh,Họ và tên,Lớp,Đề kiểm tra,Môn,Điểm số,Xếp loại,Số lần chuyển tab,Thời gian nộp'];

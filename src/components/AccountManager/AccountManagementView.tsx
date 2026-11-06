@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   Users, 
   UserPlus, 
@@ -141,6 +142,8 @@ export const AccountManagementView: React.FC<AccountManagementViewProps> = ({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Form States
   const [formName, setFormName] = useState('');
@@ -369,15 +372,69 @@ Bùi Thảo Nhi`
     setBatchPreview(generated);
   };
 
-  // Upload File for Batch
+  // Download Sample Excel Template
+  const downloadSampleExcel = () => {
+    const sampleRows = [
+      ['STT', 'Họ và tên', 'Lớp', 'Mã định danh (Tùy chọn)', 'Mật khẩu PIN (Tùy chọn)'],
+      [1, 'Nguyễn Văn An', '9A1', '', '123456'],
+      [2, 'Trần Thị Bình', '9A1', '', '123456'],
+      [3, 'Lê Hoàng Cường', '9A1', '', '123456'],
+      [4, 'Phạm Ngọc Duyên', '9A1', '', '123456'],
+      [5, 'Hoàng Minh Đức', '9A1', '', '123456'],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(sampleRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh_Sach_Hoc_Sinh');
+    XLSX.writeFile(wb, 'Mau_Danh_Sach_Hoc_Sinh_THCS_NguyenDu.xlsx');
+  };
+
+  // Upload File for Batch (.xlsx, .xls, .csv, .txt)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      const text = await file.text();
-      setBatchRawText(text);
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+      let lines: string[] = [];
+
+      if (isExcel) {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        rows.forEach((row, rIdx) => {
+          if (!row || row.length === 0) return;
+          const strCells = row.map(c => String(c ?? '').trim()).filter(Boolean);
+          if (strCells.length === 0) return;
+          const joined = strCells.join(' ').toLowerCase();
+          // Skip header if contains 'stt', 'họ', 'tên', 'name', 'lớp'
+          if (rIdx === 0 && (joined.includes('họ') || joined.includes('tên') || joined.includes('stt') || joined.includes('name'))) {
+            return;
+          }
+
+          let name = '';
+          let cls = batchClass;
+
+          if (strCells.length >= 2 && /^\d+$/.test(strCells[0])) {
+            name = strCells[1];
+            if (strCells[2] && /^[6-9][A-Z]\d*$/i.test(strCells[2])) cls = strCells[2];
+          } else {
+            name = strCells[0];
+            if (strCells[1] && /^[6-9][A-Z]\d*$/i.test(strCells[1])) cls = strCells[1];
+          }
+
+          if (name && name.length >= 2 && !/^\d+$/.test(name)) {
+            lines.push(cls ? `${name}, ${cls}` : name);
+          }
+        });
+      } else {
+        const text = await file.text();
+        lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      }
+
+      setBatchRawText(lines.join('\n'));
       const currentCount = users.filter(u => u.role === batchRole).length;
       const year = new Date().getFullYear();
 
@@ -412,19 +469,24 @@ Bùi Thảo Nhi`
         };
       });
       setBatchPreview(generated);
+      setToastMessage(`Đã đọc thành công ${generated.length} tài khoản từ tệp "${file.name}"!`);
+      setTimeout(() => setToastMessage(null), 3500);
     } catch (err) {
       console.error(err);
-      alert('Không thể đọc tệp văn bản / CSV!');
+      setToastMessage('Không thể đọc tệp Excel / CSV! Vui lòng kiểm tra lại định dạng.');
+      setTimeout(() => setToastMessage(null), 4000);
     }
   };
 
   const handleSaveBatch = () => {
     if (batchPreview.length === 0) {
-      alert('Chưa có tài khoản nào trong danh sách xem trước!');
+      setToastMessage('Chưa có tài khoản nào trong danh sách xem trước!');
+      setTimeout(() => setToastMessage(null), 3500);
       return;
     }
     onSaveUsersBatch(batchPreview);
-    alert(`Đã khởi tạo thành công ${batchPreview.length} tài khoản mới vào hệ thống!`);
+    setToastMessage(`Đã khởi tạo thành công ${batchPreview.length} tài khoản mới vào hệ thống!`);
+    setTimeout(() => setToastMessage(null), 3500);
     setShowBatchModal(false);
     setBatchPreview([]);
   };
@@ -913,16 +975,16 @@ Bùi Thảo Nhi`
                           <button
                             onClick={() => {
                               if (user.id === currentUser.id) {
-                                alert('Không thể xóa tài khoản bạn đang đăng nhập!');
+                                setToastMessage('Không thể xóa tài khoản bạn đang đăng nhập!');
+                                setTimeout(() => setToastMessage(null), 3500);
                                 return;
                               }
                               if (user.code === 'GV-TINHOC01') {
-                                alert('Tài khoản chính Thầy Toàn được bảo vệ, không thể xóa!');
+                                setToastMessage('Tài khoản chính Thầy Toàn được bảo vệ, không thể xóa!');
+                                setTimeout(() => setToastMessage(null), 3500);
                                 return;
                               }
-                              if (confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản "${user.name}" (${user.code})?`)) {
-                                onDeleteUser(user.id);
-                              }
+                              setUserToDelete(user);
                             }}
                             className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer"
                             title="Xóa tài khoản"
@@ -1324,18 +1386,26 @@ Bùi Thảo Nhi`
                   </div>
                 )}
 
-                <div className="flex items-end">
-                  <label className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 col-span-1 sm:col-span-4 pt-1">
+                  <label className="flex-1 px-3 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs">
                     <Upload className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Tải tệp (.txt/.csv)</span>
+                    <span>Tải tệp Excel / CSV (.xlsx, .xls, .csv, .txt)</span>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".txt,.csv"
+                      accept=".xlsx,.xls,.csv,.txt"
                       className="hidden"
                       onChange={handleFileUpload}
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={downloadSampleExcel}
+                    className="px-3.5 py-2 rounded-lg bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Tải Mẫu Excel (.xlsx)</span>
+                  </button>
                 </div>
               </div>
 
@@ -1431,6 +1501,63 @@ Bùi Thảo Nhi`
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">
+                Xác Nhận Xóa Vĩnh Viễn Tài Khoản
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Bạn có chắc chắn muốn xóa tài khoản <strong className="text-slate-900">"{userToDelete.name}"</strong>?
+              </p>
+              <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-200 text-left space-y-1 font-mono">
+                <div>Mã định danh (ID): <span className="font-bold text-blue-700">{userToDelete.code}</span></div>
+                <div>Vai trò: <span className="font-bold text-slate-800">{userToDelete.role === 'admin' ? 'Quản trị viên' : userToDelete.role === 'teacher' ? 'Giáo viên' : `Học sinh (Lớp ${userToDelete.className || '-'})`}</span></div>
+                <div>Email: <span className="text-slate-600">{userToDelete.email}</span></div>
+              </div>
+              <p className="text-[11px] text-rose-600 bg-rose-50 p-2 rounded-lg mt-2 font-medium">
+                ⚠️ Thao tác này không thể hoàn tác. Dữ liệu tài khoản sẽ bị xóa hoàn toàn khỏi hệ thống.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteUser(userToDelete.id);
+                  setToastMessage(`Đã xóa vĩnh viễn tài khoản "${userToDelete.name}" (${userToDelete.code})!`);
+                  setTimeout(() => setToastMessage(null), 3500);
+                  setUserToDelete(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xác Nhận Xóa</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-2 border border-slate-700">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>

@@ -92,7 +92,7 @@ export const ExamList: React.FC<ExamListProps> = ({
         // For logged-in student, ONLY display exams assigned to their grade and subject (and class if targeted)
         if (currentUser.role === 'student') {
           // Check student grade match (e.g. exam.grade matches currentUser.grade)
-          if (currentUser.grade && exam.grade !== currentUser.grade) {
+          if (currentUser.grade && Number(exam.grade) !== Number(currentUser.grade)) {
             return false;
           }
           // Check student subject match (if student has specific subject or general)
@@ -100,8 +100,8 @@ export const ExamList: React.FC<ExamListProps> = ({
             return false;
           }
           // Check target classes if specified and not 'All'
-          if (exam.targetClasses && exam.targetClasses.length > 0 && !exam.targetClasses.includes('All') && currentUser.className) {
-            if (!exam.targetClasses.includes(currentUser.className)) {
+          if (exam.targetClasses && exam.targetClasses.length > 0 && !exam.targetClasses.includes('All')) {
+            if (!currentUser.className || !exam.targetClasses.includes(currentUser.className)) {
               return false;
             }
           }
@@ -116,8 +116,8 @@ export const ExamList: React.FC<ExamListProps> = ({
       if (moderationFilter === 'rejected' && exam.approvalStatus !== 'rejected') return false;
     }
 
-    const matchSubject = selectedSubject === 'Tất cả' || exam.subject === selectedSubject;
-    const matchGrade = selectedGrade === 'Tất cả' || `Lớp ${exam.grade}` === selectedGrade;
+    const matchSubject = currentUser.role === 'student' ? true : (selectedSubject === 'Tất cả' || exam.subject === selectedSubject);
+    const matchGrade = currentUser.role === 'student' ? true : (selectedGrade === 'Tất cả' || `Lớp ${exam.grade}` === selectedGrade);
     const matchStatus = selectedStatus === 'all' || exam.status === selectedStatus;
     const matchQuery = 
       exam.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -330,22 +330,29 @@ export const ExamList: React.FC<ExamListProps> = ({
         )}
 
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Grade Selector */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-            {GRADE_LIST.map(gr => (
-              <button
-                key={gr}
-                onClick={() => setSelectedGrade(gr)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
-                  selectedGrade === gr
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {gr}
-              </button>
-            ))}
-          </div>
+          {/* Grade Selector / Student Assigned Badge */}
+          {currentUser.role === 'student' ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+              <span>Đề thi được giao: Khối {currentUser.grade || '9'} {currentUser.className ? `• Lớp ${currentUser.className}` : ''}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+              {GRADE_LIST.map(gr => (
+                <button
+                  key={gr}
+                  onClick={() => setSelectedGrade(gr)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                    selectedGrade === gr
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {gr}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Search Box */}
           <div className="relative w-full lg:w-72 shrink-0">

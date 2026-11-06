@@ -32,8 +32,8 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
   onClose,
   onRetake
 }) => {
-  const isStudent = currentUser?.role === 'student';
-  const showDetailedAnswers = !isStudent;
+  const isTeacherOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'teacher';
+  const showDetailedAnswers = isTeacherOrAdmin;
   useEffect(() => {
     if (attempt.score >= 8.0) {
       try {

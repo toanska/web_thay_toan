@@ -1,24 +1,20 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, 
-  UserCheck, 
-  Award, 
   BookOpen, 
   Calendar, 
   Clock, 
   Eye, 
   Printer, 
-  TrendingUp, 
   AlertCircle, 
-  CheckCircle2, 
   Sparkles, 
   Filter, 
-  ArrowRight,
-  ShieldAlert,
+  ShieldAlert, 
   GraduationCap,
-  FileSpreadsheet
+  School,
+  UserCheck
 } from 'lucide-react';
-import { ExamAttempt, User, Exam, Subject } from '../../types';
+import { ExamAttempt, User, Exam } from '../../types';
 
 interface ScoreLookupViewProps {
   attempts: ExamAttempt[];
@@ -33,54 +29,98 @@ interface ScoreLookupViewProps {
 export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
   attempts,
   users,
-  exams,
+  exams: _exams,
   currentUser,
   onViewAttempt,
-  onTakeExam,
-  onNavigateToLogin
+  onTakeExam: _onTakeExam,
+  onNavigateToLogin: _onNavigateToLogin
 }) => {
-  const initialCode = currentUser?.role === 'student' ? currentUser.code : 'HS-20240901';
-  const [searchCode, setSearchCode] = useState(initialCode);
-  const [activeQuery, setActiveQuery] = useState(initialCode);
+  // If currentUser is a logged-in student, default to their own info; otherwise start empty
+  const isStudentLoggedIn = currentUser?.role === 'student';
+  const defaultQuery = isStudentLoggedIn ? (currentUser.code || currentUser.name || '') : '';
+  const defaultClass = isStudentLoggedIn ? (currentUser.className || 'all') : 'all';
+
+  const [searchQuery, setSearchQuery] = useState(defaultQuery);
+  const [searchClass, setSearchClass] = useState<string>(defaultClass);
+  const [activeQuery, setActiveQuery] = useState(defaultQuery);
+  const [activeClass, setActiveClass] = useState<string>(defaultClass);
+  const [hasSearched, setHasSearched] = useState(isStudentLoggedIn);
   const [selectedSubject, setSelectedSubject] = useState<string>('Tất cả');
+  const [selectedStudentCode, setSelectedStudentCode] = useState<string | null>(isStudentLoggedIn ? (currentUser.code || null) : null);
 
-  // Find all student users
-  const studentUsers = useMemo(() => {
-    return users.filter(u => u.role === 'student');
-  }, [users]);
+  // Available classes in system
+  const availableClasses = useMemo(() => {
+    const classSet = new Set<string>();
+    users.forEach(u => { if (u.className) classSet.add(u.className); });
+    attempts.forEach(a => { if (a.studentClass) classSet.add(a.studentClass); });
+    ['6A1', '6A2', '7A1', '7A2', '8A1', '8A2', '9A1', '9A2'].forEach(c => classSet.add(c));
+    return Array.from(classSet).sort();
+  }, [users, attempts]);
 
-  // Execute lookup based on activeQuery
-  const lookupResult = useMemo(() => {
+  // Execute lookup based on activeQuery and activeClass
+  const searchResults = useMemo(() => {
+    if (!hasSearched) return null;
     const q = activeQuery.trim().toLowerCase();
-    if (!q) return null;
+    const targetClass = activeClass !== 'all' ? activeClass.trim().toLowerCase() : null;
 
-    // Find student matching code or id or name
-    const targetStudent = users.find(u => 
-      u.code.toLowerCase() === q ||
-      u.id.toLowerCase() === q ||
-      u.name.toLowerCase().includes(q)
-    );
+    if (!q && !targetClass) return null;
 
-    // Find all attempts matching studentCode or studentId or studentName
-    const matchingAttempts = attempts.filter(a => 
-      a.studentCode.toLowerCase() === q ||
-      a.studentId.toLowerCase() === q ||
-      (targetStudent && (a.studentId === targetStudent.id || a.studentCode === targetStudent.code)) ||
-      a.studentName.toLowerCase().includes(q)
-    );
+    // 1. Find candidate students from users
+    const candidateStudents = users.filter(u => {
+      if (u.role !== 'student') return false;
+      if (targetClass && u.className && u.className.toLowerCase() !== targetClass) return false;
+      if (!q) return true;
+      return (
+        u.code.toLowerCase().includes(q) ||
+        u.id.toLowerCase().includes(q) ||
+        u.name.toLowerCase().includes(q)
+      );
+    });
 
-    // If student user exists, take info from user; otherwise take from first attempt
+    // 2. Find matching attempts
+    const matchingAttempts = attempts.filter(a => {
+      if (targetClass && a.studentClass && a.studentClass.toLowerCase() !== targetClass) return false;
+      if (!q) return true;
+      return (
+        a.studentCode.toLowerCase().includes(q) ||
+        a.studentId.toLowerCase().includes(q) ||
+        a.studentName.toLowerCase().includes(q)
+      );
+    });
+
+    // If a specific student is selected (or only one student found, or exact match)
+    let activeStudent = candidateStudents.find(s => s.code === selectedStudentCode) || null;
+    if (!activeStudent && candidateStudents.length === 1) {
+      activeStudent = candidateStudents[0];
+    } else if (!activeStudent && candidateStudents.length > 0 && q) {
+      // Check for exact code match
+      const exactCode = candidateStudents.find(s => s.code.toLowerCase() === q);
+      if (exactCode) activeStudent = exactCode;
+    }
+
+    // Determine attempts for activeStudent
+    let studentAttempts: ExamAttempt[] = [];
+    if (activeStudent) {
+      studentAttempts = attempts.filter(a => 
+        a.studentCode === activeStudent!.code || 
+        a.studentId === activeStudent!.id ||
+        (a.studentName.toLowerCase() === activeStudent!.name.toLowerCase() && (!targetClass || a.studentClass.toLowerCase() === targetClass))
+      );
+    } else if (matchingAttempts.length > 0 && candidateStudents.length <= 1) {
+      studentAttempts = matchingAttempts;
+    }
+
+    // Student profile info
     let studentInfo: { name: string; code: string; className: string; avatar?: string; school?: string } | null = null;
-    
-    if (targetStudent) {
+    if (activeStudent) {
       studentInfo = {
-        name: targetStudent.name,
-        code: targetStudent.code,
-        className: targetStudent.className || '9A1',
-        avatar: targetStudent.avatar,
-        school: targetStudent.school || 'Trường THCS Nguyễn Du'
+        name: activeStudent.name,
+        code: activeStudent.code,
+        className: activeStudent.className || 'Chưa phân lớp',
+        avatar: activeStudent.avatar,
+        school: activeStudent.school || 'Trường THCS Nguyễn Du'
       };
-    } else if (matchingAttempts.length > 0) {
+    } else if (matchingAttempts.length > 0 && candidateStudents.length <= 1) {
       studentInfo = {
         name: matchingAttempts[0].studentName,
         code: matchingAttempts[0].studentCode,
@@ -90,36 +130,39 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
     }
 
     return {
-      student: studentInfo,
-      attempts: matchingAttempts
+      candidateStudents,
+      activeStudent,
+      studentInfo,
+      attempts: studentAttempts,
+      allMatchingAttemptsCount: matchingAttempts.length
     };
-  }, [activeQuery, attempts, users]);
+  }, [hasSearched, activeQuery, activeClass, selectedStudentCode, users, attempts]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchCode.trim()) {
-      setActiveQuery(searchCode.trim());
+    if (!searchQuery.trim() && searchClass === 'all') {
+      alert('Vui lòng nhập Mã học sinh (ID) hoặc Họ tên, hoặc chọn Lớp học để tra cứu.');
+      return;
     }
-  };
-
-  const handleSelectQuickStudent = (code: string) => {
-    setSearchCode(code);
-    setActiveQuery(code);
+    setActiveQuery(searchQuery.trim());
+    setActiveClass(searchClass);
+    setSelectedStudentCode(null);
+    setHasSearched(true);
   };
 
   // Filter attempts by subject
   const filteredAttempts = useMemo(() => {
-    if (!lookupResult) return [];
-    if (selectedSubject === 'Tất cả') return lookupResult.attempts;
-    return lookupResult.attempts.filter(a => a.subject === selectedSubject);
-  }, [lookupResult, selectedSubject]);
+    if (!searchResults || !searchResults.attempts) return [];
+    if (selectedSubject === 'Tất cả') return searchResults.attempts;
+    return searchResults.attempts.filter(a => a.subject === selectedSubject);
+  }, [searchResults, selectedSubject]);
 
   // Metrics for looked up student
   const studentMetrics = useMemo(() => {
-    if (!lookupResult || lookupResult.attempts.length === 0) {
+    if (!searchResults || searchResults.attempts.length === 0) {
       return { total: 0, avg: 0, highest: 0, passedCount: 0, perfectCount: 0, ranking: 'Chưa có dữ liệu' };
     }
-    const atts = lookupResult.attempts;
+    const atts = searchResults.attempts;
     const total = atts.length;
     const sum = atts.reduce((s, a) => s + a.score, 0);
     const avg = Math.round((sum / total) * 10) / 10;
@@ -135,7 +178,7 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
     else ranking = 'Cần cố gắng';
 
     return { total, avg, highest, passedCount, perfectCount, ranking };
-  }, [lookupResult]);
+  }, [searchResults]);
 
   // Handle print
   const handlePrintTranscript = () => {
@@ -153,101 +196,123 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
               Tra Cứu Khảo Thí & Bảng Điểm Điện Tử
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Tra Cứu Điểm Bài Kiểm Tra Với ID Học Sinh
+              Tra Cứu Điểm Bài Kiểm Tra Học Sinh
             </h2>
             <p className="text-blue-100 text-sm leading-relaxed">
-              Nhập mã định danh học sinh (Mã HS / ID) để tra cứu toàn bộ lịch sử làm bài kiểm tra trực tuyến, điểm số chi tiết từng môn, xếp loại và lời phê từ giáo viên.
+              Nhập chính xác Mã định danh học sinh (ID) hoặc Họ và tên và Lớp để tra cứu lịch sử làm bài kiểm tra trực tuyến, điểm số, xếp loại và lời phê của giáo viên.
             </p>
           </div>
 
           <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-xs text-blue-100 space-y-2 max-w-sm shrink-0">
             <div className="font-bold text-amber-300 flex items-center gap-1.5">
               <GraduationCap className="w-4 h-4" />
-              Quy ước mã định danh:
+              Quy ước tra cứu điểm:
             </div>
             <p className="text-[11px] leading-tight">
-              Mã học sinh có định dạng: <span className="font-mono font-bold text-white">HS-NĂM-KHỐI-STT</span> (Ví dụ: <span className="font-mono text-amber-200">HS-20240901</span>).
+              Tìm theo Mã học sinh (VD: <span className="font-mono text-amber-200 font-bold">HS-20240901</span>), Họ và tên (VD: <span className="text-amber-200 font-bold">Trần Quốc Tuấn</span>), hoặc kết hợp Lớp học.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Search Bar & Quick Select Pills */}
+      {/* Search Bar - No preset sample students */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
-        <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-center gap-3">
+        <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row items-center gap-3">
+          {/* Input ID or Name */}
           <div className="relative flex-1 w-full">
-            <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              value={searchCode}
-              onChange={(e) => setSearchCode(e.target.value)}
-              placeholder="Nhập Mã học sinh (VD: HS-20240901) hoặc Họ tên học sinh..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Nhập Mã học sinh / ID (VD: HS-20240901) hoặc Họ và tên..."
               className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
             />
           </div>
 
+          {/* Select Class */}
+          <div className="w-full md:w-56 shrink-0">
+            <select
+              value={searchClass}
+              onChange={(e) => setSearchClass(e.target.value)}
+              aria-label="Chọn lớp học"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all cursor-pointer"
+            >
+              <option value="all">Tất cả các lớp</option>
+              {availableClasses.map(cls => (
+                <option key={cls} value={cls}>Lớp {cls}</option>
+              ))}
+            </select>
+          </div>
+
           <button
             type="submit"
-            className="w-full sm:w-auto px-6 py-3 bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            className="w-full md:w-auto px-7 py-3 bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
           >
             <Search className="w-4 h-4" />
             <span>Tra Cứu Điểm</span>
           </button>
         </form>
-
-        {/* Quick select sample student chips */}
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-500 font-semibold flex items-center gap-1">
-            <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-            Học sinh mẫu sẵn có:
-          </span>
-          {studentUsers.map(st => (
-            <button
-              key={st.id}
-              onClick={() => handleSelectQuickStudent(st.code)}
-              className={`text-xs px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeQuery.toLowerCase() === st.code.toLowerCase() || activeQuery.toLowerCase() === st.name.toLowerCase()
-                  ? 'bg-blue-900 text-white border-blue-900 font-bold shadow-xs'
-                  : 'bg-slate-50 hover:bg-blue-50 text-slate-700 border-slate-200 hover:border-blue-300'
-              }`}
-            >
-              <span className="font-mono font-bold text-[11px] opacity-80">{st.code}</span>
-              <span>- {st.name} ({st.className})</span>
-            </button>
-          ))}
-        </div>
       </div>
 
+      {/* If Multiple Candidate Students Found from Query */}
+      {searchResults && searchResults.candidateStudents.length > 1 && !searchResults.activeStudent && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
+          <div className="flex items-center gap-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3">
+            <UserCheck className="w-4 h-4 text-blue-600" />
+            <span>Tìm thấy {searchResults.candidateStudents.length} học sinh phù hợp. Vui lòng chọn học sinh cần xem bảng điểm:</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {searchResults.candidateStudents.map(st => (
+              <button
+                key={st.id}
+                onClick={() => setSelectedStudentCode(st.code)}
+                className="p-3.5 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 text-left transition-all cursor-pointer flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-bold text-slate-900 text-sm group-hover:text-blue-900">{st.name}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Mã HS: <span className="font-mono font-bold text-blue-700">{st.code}</span> • Lớp {st.className}
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-blue-600 group-hover:underline">Xem điểm →</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Main Results Display */}
-      {lookupResult && lookupResult.student ? (
+      {searchResults && searchResults.studentInfo ? (
         <div className="space-y-6">
           {/* Student Profile Card */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex items-center space-x-4">
-              {lookupResult.student.avatar ? (
+              {searchResults.studentInfo.avatar ? (
                 <img
-                  src={lookupResult.student.avatar}
-                  alt={lookupResult.student.name}
+                  src={searchResults.studentInfo.avatar}
+                  alt={searchResults.studentInfo.name}
                   className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-blue-600 shadow-md shrink-0"
                 />
               ) : (
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-blue-100 text-blue-800 font-bold text-2xl flex items-center justify-center border-2 border-blue-300 shrink-0">
-                  {lookupResult.student.name.charAt(0)}
+                  {searchResults.studentInfo.name.charAt(0)}
                 </div>
               )}
 
               <div className="space-y-1">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200">
                   <GraduationCap className="w-3.5 h-3.5" />
-                  Học sinh Lớp {lookupResult.student.className}
+                  Học sinh Lớp {searchResults.studentInfo.className}
                 </div>
                 <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-serif">
-                  {lookupResult.student.name}
+                  {searchResults.studentInfo.name}
                 </h3>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                  <span>Mã định danh: <strong className="font-mono text-blue-900 font-bold">{lookupResult.student.code}</strong></span>
+                  <span>Mã định danh: <strong className="font-mono text-blue-900 font-bold">{searchResults.studentInfo.code}</strong></span>
                   <span>•</span>
-                  <span>{lookupResult.student.school}</span>
+                  <span>{searchResults.studentInfo.school}</span>
                 </div>
               </div>
             </div>
@@ -288,7 +353,7 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
                   Danh Sách Điểm Các Bài Kiểm Tra Đã Làm
                 </h4>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Hiển thị chi tiết từng bài thi khảo thí trực tuyến của học sinh {lookupResult.student.name}
+                  Hiển thị chi tiết từng bài thi khảo thí trực tuyến của học sinh {searchResults.studentInfo.name}
                 </p>
               </div>
 
@@ -311,7 +376,7 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
               <div className="text-center py-12 text-slate-400 space-y-3">
                 <AlertCircle className="w-10 h-10 text-slate-300 mx-auto" />
                 <p className="text-sm font-medium text-slate-600">
-                  Chưa có bài kiểm tra nào được ghi nhận cho môn học này.
+                  Chưa có bài kiểm tra nào được ghi nhận cho học sinh này.
                 </p>
                 <p className="text-xs text-slate-400">
                   Học sinh có thể vào mục "Bài kiểm tra trực tuyến" để bắt đầu làm bài.
@@ -408,18 +473,33 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
             )}
           </div>
         </div>
-      ) : (
+      ) : hasSearched ? (
         /* Not found state */
         <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center space-y-4 shadow-2xs">
           <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
             <Search className="w-8 h-8" />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
-            <h3 className="text-lg font-bold text-slate-800">Không tìm thấy mã học sinh "{activeQuery}"</h3>
+            <h3 className="text-lg font-bold text-slate-800">
+              Không tìm thấy kết quả tra cứu phù hợp
+            </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Vui lòng kiểm tra lại chính xác Mã học sinh (ví dụ: <span className="font-mono font-bold text-blue-600">HS-20240901</span>) hoặc nhấp vào danh sách học sinh mẫu ở thanh tra cứu phía trên.
+              Không tìm thấy dữ liệu điểm của học sinh với từ khóa {activeQuery ? `"${activeQuery}"` : ''} {activeClass !== 'all' ? `(Lớp ${activeClass})` : ''}. Vui lòng kiểm tra lại chính xác Mã học sinh (ID) hoặc Họ và tên và Lớp học.
             </p>
           </div>
+        </div>
+      ) : (
+        /* Initial Ready-to-Search state (no preset student) */
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 sm:p-14 text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-xs">
+            <School className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-800">
+            Sẵn Sàng Tra Cứu Điểm Khảo Thí Trực Tuyến
+          </h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Vui lòng nhập <strong>Mã học sinh (ID)</strong> hoặc <strong>Họ và tên</strong>, chọn <strong>Lớp học</strong> ở khung tìm kiếm phía trên rồi bấm nút <strong>Tra Cứu Điểm</strong> để xem kết quả chi tiết.
+          </p>
         </div>
       )}
     </div>

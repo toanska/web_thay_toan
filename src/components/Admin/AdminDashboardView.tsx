@@ -46,6 +46,7 @@ import {
 } from '../../types';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
 import { RejectModal } from './RejectModal';
+import { AccountManagementView } from '../AccountManager/AccountManagementView';
 
 interface AdminDashboardViewProps {
   currentUser: User;
@@ -57,7 +58,9 @@ interface AdminDashboardViewProps {
   questions: Question[];
   // Handlers
   onSaveUser: (user: User) => void;
+  onSaveUsersBatch?: (users: User[]) => void;
   onDeleteUser: (id: string) => void;
+  onSwitchUser?: (user: User) => void;
   onOpenCreateNews: () => void;
   onEditNews: (news: NewsArticle) => void;
   onDeleteNews: (id: string) => void;
@@ -92,7 +95,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   attempts,
   questions,
   onSaveUser,
+  onSaveUsersBatch,
   onDeleteUser,
+  onSwitchUser,
   onOpenCreateNews,
   onEditNews,
   onDeleteNews,
@@ -117,7 +122,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [filterRole, setFilterRole] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [attemptClassFilter, setAttemptClassFilter] = useState<string>('all');
   const [attemptExamFilter, setAttemptExamFilter] = useState<string>('all');
@@ -178,18 +182,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     );
   }
 
-  // Filtered users
-  const filteredUsers = useMemo(() => {
-    return users.filter(u => {
-      const matchRole = filterRole === 'all' || u.role === filterRole;
-      const matchSearch = !searchKeyword || 
-        u.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        u.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchKeyword.toLowerCase());
-      return matchRole && matchSearch;
-    });
-  }, [users, filterRole, searchKeyword]);
-
   // Filtered attempts
   const filteredAttempts = useMemo(() => {
     return attempts.filter(a => {
@@ -213,15 +205,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       return matchGrade && matchSearch;
     });
   }, [questions, filterGrade, searchKeyword]);
-
-  // Toggle user lock
-  const handleToggleLockUser = (u: User) => {
-    const updated: User = {
-      ...u,
-      status: u.status === 'locked' ? 'active' : 'locked'
-    };
-    onSaveUser(updated);
-  };
 
   return (
     <div className="space-y-6">
@@ -476,142 +459,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* ================= SECTION: TÀI KHOẢN ================= */}
       {activeSection === 'accounts' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
-            <div>
-              <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-600" />
-                <span>Quản Lý Danh Sách Tài Khoản ({filteredUsers.length})</span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Kiểm soát tài khoản người dùng, xem mã định danh, vai trò, lớp và mật khẩu PIN
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => onNavigateToTab('students')}
-                className="px-4 py-2 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Thêm tài khoản mới</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Filters Bar */}
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="Tìm kiếm theo tên, mã tài khoản hoặc email..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 w-full sm:w-auto">
-              {(['all', 'student', 'teacher', 'admin'] as const).map(role => (
-                <button
-                  key={role}
-                  onClick={() => setFilterRole(role)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    filterRole === role
-                      ? 'bg-blue-900 text-white'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  {role === 'all' ? 'Tất cả' : role === 'student' ? 'Học sinh' : role === 'teacher' ? 'Giáo viên' : 'Admin'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Users Table */}
-          <div className="overflow-x-auto border border-slate-200 rounded-2xl">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
-                <tr>
-                  <th className="px-4 py-3">Người dùng</th>
-                  <th className="px-4 py-3">Mã tài khoản</th>
-                  <th className="px-4 py-3">Vai trò</th>
-                  <th className="px-4 py-3">Lớp / Môn</th>
-                  <th className="px-4 py-3">Mật khẩu PIN</th>
-                  <th className="px-4 py-3">Trạng thái</th>
-                  <th className="px-4 py-3 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredUsers.map(u => (
-                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-slate-900">
-                      <div className="flex items-center gap-2.5">
-                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0" />
-                        <div>
-                          <div className="font-bold text-slate-900">{u.name}</div>
-                          <div className="text-[11px] text-slate-400 font-normal">{u.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono font-bold text-blue-700">
-                      {u.code}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        u.role === 'student' ? 'bg-sky-100 text-sky-800' :
-                        u.role === 'teacher' ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'
-                      }`}>
-                        {u.role === 'student' ? 'Học sinh' : u.role === 'teacher' ? 'Giáo viên' : 'Admin'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-600">
-                      {u.className ? `Lớp ${u.className}` : u.subject || '-'}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-slate-600">
-                      {u.pin || '123456'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        u.status === 'locked' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {u.status === 'locked' ? 'Tạm khóa' : 'Hoạt động'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleToggleLockUser(u)}
-                          className={`p-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
-                            u.status === 'locked' 
-                              ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100' 
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                          title={u.status === 'locked' ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
-                        >
-                          {u.status === 'locked' ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-                        </button>
-                        {u.id !== currentUser.id && (
-                          <button
-                            onClick={() => {
-                              if (confirm(`Bạn có chắc muốn xóa tài khoản ${u.name}?`)) {
-                                onDeleteUser(u.id);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition-all cursor-pointer"
-                            title="Xóa tài khoản"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-3 sm:p-6">
+          <AccountManagementView
+            users={users}
+            currentUser={currentUser}
+            attempts={attempts}
+            onSaveUser={onSaveUser}
+            onSaveUsersBatch={onSaveUsersBatch || (() => {})}
+            onDeleteUser={onDeleteUser}
+            onSwitchUser={onSwitchUser || (() => {})}
+            onNavigateToLogin={() => onNavigateToTab('login')}
+          />
         </div>
       )}
 
@@ -1117,23 +975,34 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     csvContent += row.join(",") + "\n";
                   });
 
+                  const sanitizeFilename = (str: string) => {
+                    return str
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '')
+                      .replace(/đ/g, 'd')
+                      .replace(/Đ/g, 'D')
+                      .replace(/[^a-zA-Z0-9\s_-]/g, '')
+                      .trim()
+                      .replace(/\s+/g, '_');
+                  };
+
                   let examNameSlug = 'Tat_Ca_Bai_Kiem_Tra';
                   if (attemptExamFilter !== 'all') {
                     const foundExam = exams.find(e => e.id === attemptExamFilter);
                     if (foundExam) {
-                      examNameSlug = foundExam.title.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+                      examNameSlug = sanitizeFilename(foundExam.title);
                     }
                   } else if (dataToExport.length > 0) {
                     const firstTitle = dataToExport[0].examTitle;
                     const allSame = dataToExport.every(a => a.examTitle === firstTitle);
                     if (allSame) {
-                      examNameSlug = firstTitle.replace(/[^a-zA-Z0-9À-ỹ\s]/g, '').trim().replace(/\s+/g, '_');
+                      examNameSlug = sanitizeFilename(firstTitle);
                     } else {
                       examNameSlug = 'Nhieu_Bai_Kiem_Tra';
                     }
                   }
 
-                  const classSlug = attemptClassFilter !== 'all' ? `_Lop_${attemptClassFilter}` : '';
+                  const classSlug = attemptClassFilter !== 'all' ? `_Lop_${sanitizeFilename(attemptClassFilter)}` : '';
                   const fileName = `Ket_Qua_${examNameSlug}${classSlug}_${Date.now().toString().slice(-6)}.csv`;
 
                   const encodedUri = encodeURI(csvContent);

@@ -1,0 +1,6 @@
+{
+  "summary": "Kế hoạch rà soát và kiểm tra toàn diện tất cả các tính năng của website THCS Nguyễn Du e-Testing:\n1. Kiểm tra phân quyền truy cập và bảo vệ tuyến tính năng (chặn truy cập báo cáo phổ điểm cho học sinh/khách, xử lý chuyển tab an toàn khi đổi tài khoản).\n2. Kiểm tra hiển thị đề thi theo đúng khối/lớp/môn của học sinh đã đăng nhập.\n3. Rà soát bảo mật kết quả thi (ẩn đáp án chi tiết và giải thích với học sinh và khách, chỉ hiển thị cho giáo viên).\n4. Kiểm tra trang Quản trị, lọc kết quả theo lớp/đề thi, xóa hàng loạt, và xuất báo cáo CSV theo đúng tên đề thi.\n5. Kiểm tra tính toàn vẹn dữ liệu, giao diện học kỳ I (2026-2027), và sao lưu tự động.",
+  "updatedAt": "2026-11-06T15:16:24.777815892Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

@@ -188,7 +188,10 @@ export function App() {
   const handleUserChange = (user: User) => {
     setCurrentUser(user);
     StorageService.setCurrentUser(user);
-    if (activeTab === 'students' && !isTeacherToanOrAdmin(user)) {
+    const isTeacherOrAdmin = user.role === 'admin' || user.role === 'teacher';
+    if ((activeTab === 'students' || activeTab === 'admin_portal') && !isTeacherToanOrAdmin(user)) {
+      setActiveTab('exams');
+    } else if (activeTab === 'reports' && !isTeacherOrAdmin) {
       setActiveTab('exams');
     }
   };
@@ -525,7 +528,9 @@ export function App() {
             attempts={attempts}
             questions={questions}
             onSaveUser={handleSaveUser}
+            onSaveUsersBatch={handleSaveUsersBatch}
             onDeleteUser={handleDeleteUser}
+            onSwitchUser={handleUserChange}
             onOpenCreateNews={() => setEditingNews(null)}
             onEditNews={(art) => setEditingNews(art)}
             onDeleteNews={handleDeleteNews}
@@ -607,12 +612,38 @@ export function App() {
 
         {/* PHÂN HỆ QUẢN TRỊ: Báo Cáo & Thống Kê Phổ Điểm */}
         {activeTab === 'reports' && (
-          <AnalyticsDashboard
-            exams={exams}
-            attempts={attempts}
-            currentUser={currentUser}
-            onViewAttempt={(att) => setViewingAttempt(att)}
-          />
+          (currentUser.role === 'admin' || currentUser.role === 'teacher') ? (
+            <AnalyticsDashboard
+              exams={exams}
+              attempts={attempts}
+              currentUser={currentUser}
+              onViewAttempt={(att) => setViewingAttempt(att)}
+            />
+          ) : (
+            <div className="max-w-2xl mx-auto my-12 p-8 bg-white rounded-2xl border border-slate-200 shadow-xl text-center space-y-4">
+              <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+                📊
+              </div>
+              <h2 className="text-xl font-bold text-slate-900">Báo Cáo & Phổ Điểm Dành Cho Giáo Viên</h2>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                Chức năng phân tích phổ điểm và thống kê chất lượng khảo thí chỉ dành riêng cho <strong>Giáo viên</strong> và <strong>Quản trị viên</strong>.
+              </p>
+              <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={() => setIsLoginModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition-all shadow-md cursor-pointer"
+                >
+                  Đăng nhập tài khoản Giáo viên
+                </button>
+                <button
+                  onClick={() => setActiveTab('exams')}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Về danh sách bài kiểm tra
+                </button>
+              </div>
+            </div>
+          )
         )}
 
         {/* Hồ Sơ Cá Nhân */}
