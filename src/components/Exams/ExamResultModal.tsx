@@ -202,7 +202,9 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                   <div
                     key={result.questionId || idx}
                     className={`p-4 sm:p-5 rounded-xl border-2 space-y-3 transition-all ${
-                      isCorrect ? 'border-emerald-200 bg-emerald-50/20' : 'border-rose-200 bg-rose-50/20'
+                      isTeacherOrAdmin
+                        ? (isCorrect ? 'border-emerald-200 bg-emerald-50/20' : 'border-rose-200 bg-rose-50/20')
+                        : 'border-slate-200 bg-white'
                     }`}
                   >
                     {/* Header of question review */}
