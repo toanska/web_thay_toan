@@ -208,24 +208,24 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                     {/* Header of question review */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          isCorrect ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
-                        }`}>
+                        <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold">
                           {idx + 1}
                         </span>
                         <span className="text-xs font-bold text-slate-800">
-                          {isCorrect ? 'Đúng' : 'Sai'} ({result.pointsAwarded}/{result.maxPoints} đ)
+                          {isTeacherOrAdmin ? `${isCorrect ? 'Đúng' : 'Sai'} (${result.pointsAwarded}/${result.maxPoints} đ)` : `Câu hỏi ${idx + 1}`}
                         </span>
                       </div>
 
-                      {isCorrect ? (
-                        <span className="flex items-center gap-1 text-xs text-emerald-700 font-bold">
-                          <CheckCircle2 className="w-4 h-4" /> Chính xác
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-rose-700 font-bold">
-                          <XCircle className="w-4 h-4" /> Chưa đúng
-                        </span>
+                      {isTeacherOrAdmin && (
+                        isCorrect ? (
+                          <span className="flex items-center gap-1 text-xs text-emerald-700 font-bold">
+                            <CheckCircle2 className="w-4 h-4" /> Chính xác
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-rose-700 font-bold">
+                            <XCircle className="w-4 h-4" /> Chưa đúng
+                          </span>
+                        )
                       )}
                     </div>
 

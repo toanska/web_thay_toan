@@ -12,7 +12,10 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'thcs_notifications_v1',
   MATERIALS: 'thcs_materials_v1',
   LAST_MODIFIED: 'thcs_last_modified_v1',
+  SITE_LOGO: 'thcs_site_logo_v1',
 };
+
+export const DEFAULT_SITE_LOGO = '/assets/aistudio/LOGO_WEB_05e2bec9.jpg';
 
 // Cross-tab real-time sync via BroadcastChannel
 export const dbSyncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
@@ -195,6 +198,32 @@ export const StorageService = {
   deleteUser(id: string): void {
     const users = this.getUsers().filter(u => u.id !== id);
     setItem(STORAGE_KEYS.USERS, users);
+  },
+
+  // Site Logo Management
+  getSiteLogo(): string {
+    if (typeof localStorage === 'undefined') return DEFAULT_SITE_LOGO;
+    return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_SITE_LOGO;
+  },
+
+  setSiteLogo(logoUrl: string | null): void {
+    if (typeof localStorage === 'undefined') return;
+    if (logoUrl && logoUrl !== DEFAULT_SITE_LOGO) {
+      localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logoUrl);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.SITE_LOGO);
+    }
+    const finalLogo = logoUrl || DEFAULT_SITE_LOGO;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('thcs_site_logo_updated', { detail: { logo: finalLogo } }));
+    }
+    if (dbSyncChannel) {
+      dbSyncChannel.postMessage({
+        type: 'LOGO_MUTATION',
+        logo: finalLogo,
+        timestamp: Date.now()
+      });
+    }
   },
 
   // Questions

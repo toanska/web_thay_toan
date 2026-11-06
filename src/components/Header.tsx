@@ -25,11 +25,16 @@ import {
   CloudLightning,
   ShieldCheck,
   KeyRound,
-  RefreshCw
+  RefreshCw,
+  Image as ImageIcon,
+  Camera,
+  Trash2,
+  Check
 } from 'lucide-react';
 import { User, NotificationItem, NavigationTab } from '../types';
 import { isTeacherToanOrAdmin } from '../utils/authUtils';
 import { CloudflareService } from '../services/cloudflareService';
+import { StorageService } from '../services/storageService';
 
 interface HeaderProps {
   activeTab: NavigationTab;
@@ -113,6 +118,22 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
+  const [siteLogo, setSiteLogo] = useState<string | null>(() => StorageService.getSiteLogo());
+  const [showLogoModal, setShowLogoModal] = useState(false);
+  const [logoInputUrl, setLogoInputUrl] = useState('');
+  const [logoToast, setLogoToast] = useState<string | null>(null);
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+
+  useEffect(() => {
+    const handleLogoUpdate = (e: any) => {
+      setSiteLogo(e?.detail?.logo ?? StorageService.getSiteLogo());
+    };
+    window.addEventListener('thcs_site_logo_updated', handleLogoUpdate);
+    return () => {
+      window.removeEventListener('thcs_site_logo_updated', handleLogoUpdate);
+    };
+  }, []);
+
   const unreadNotifs = notifications.filter(n => !n.read);
   const isAuthorizedToManageStudents = isTeacherToanOrAdmin(currentUser);
 
@@ -153,15 +174,52 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Top Banner / School Branding */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 text-white px-4 py-2 sm:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 backdrop-blur-xs flex items-center justify-center border border-blue-400/30 shadow-inner">
-              <Laptop className="w-5 h-5 text-amber-300" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-serif flex items-center gap-2">
-                Môn Tin học - Thầy Toàn
-              </h1>
-            </div>
+          {/* Brand Logo & Title with Click to Home Action */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab('news')}
+              className="flex items-center space-x-2.5 sm:space-x-3 text-left group cursor-pointer focus:outline-hidden transition-all duration-150 active:scale-98"
+              title="Nhấn để quay về Trang chủ (Tin tức & Thông báo)"
+            >
+              <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white shadow-md flex items-center justify-center p-0.5 border border-white/40 ring-1 ring-blue-900/10 group-hover:scale-105 group-hover:ring-2 group-hover:ring-amber-300/80 transition-all duration-200 overflow-hidden shrink-0">
+                <img
+                  src={siteLogo || '/assets/aistudio/LOGO_WEB_05e2bec9.jpg'}
+                  alt="Logo Thầy Toàn - Phạm Nhật Toàn - PNT"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src !== window.location.origin + '/assets/aistudio/LOGO_WEB_05e2bec9.jpg') {
+                      target.src = '/assets/aistudio/LOGO_WEB_05e2bec9.jpg';
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-serif flex items-center gap-2 group-hover:text-amber-200 transition-colors">
+                  <span>Môn Tin học - Thầy Toàn</span>
+                </h1>
+                <p className="text-[10px] text-blue-200/90 font-medium tracking-wide hidden sm:block">
+                  Thầy Phạm Nhật Toàn • Trường THCS Ngô Quyền
+                </p>
+              </div>
+            </button>
+
+            {/* Quick Logo Customizer button for Teacher Toan or Admin */}
+            {isAuthorizedToManageStudents && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLogoInputUrl(siteLogo || '');
+                  setShowLogoModal(true);
+                }}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-blue-200 hover:text-amber-300 border border-white/15 transition-all cursor-pointer text-xs"
+                title="Thay đổi / Cập nhật logo website (Dành riêng cho Thầy Toàn)"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-4 text-xs">
@@ -404,6 +462,18 @@ export const Header: React.FC<HeaderProps> = ({
                       <p className="text-[11px] text-slate-500">Dành cho Thầy Toàn / Quản trị viên</p>
                     </div>
                     <div className="p-2 space-y-1">
+                      <button
+                        onClick={() => {
+                          setLogoInputUrl(siteLogo || '');
+                          setShowLogoModal(true);
+                          setShowSettingsMenu(false);
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-slate-100 flex items-center space-x-2 text-slate-700 cursor-pointer"
+                      >
+                        <ImageIcon className="w-4 h-4 text-indigo-600" />
+                        <span>Cập nhật Logo Website</span>
+                      </button>
+
                       {onOpenCloudflareSync && (
                         <button
                           onClick={() => { onOpenCloudflareSync(); setShowSettingsMenu(false); }}
@@ -430,10 +500,8 @@ export const Header: React.FC<HeaderProps> = ({
 
                       <button
                         onClick={() => {
-                          if (confirm('Bạn có chắc chắn muốn khôi phục toàn bộ bài kiểm tra, tin tức và câu hỏi về trạng thái mẫu ban đầu?')) {
-                            onResetData();
-                            setShowSettingsMenu(false);
-                          }
+                          setShowResetConfirmModal(true);
+                          setShowSettingsMenu(false);
                         }}
                         className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-rose-50 flex items-center space-x-2 text-rose-600 cursor-pointer"
                       >
@@ -587,6 +655,177 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </div>
+
+      {/* MODAL: Quản lý & Thay đổi Logo Website */}
+      {showLogoModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Cập nhật Logo Website</h3>
+                  <p className="text-xs text-slate-500">Hiển thị ở góc trên bên trái và chân trang</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLogoModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Live Preview Box */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700">Xem trước hiển thị trên thanh Header:</label>
+              <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 p-4 rounded-xl flex items-center space-x-3 text-white border border-blue-400/30">
+                <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center p-1 border border-white/40 shadow-md overflow-hidden shrink-0">
+                  <img
+                    src={logoInputUrl || '/assets/aistudio/LOGO_WEB_05e2bec9.jpg'}
+                    alt="Logo xem trước"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold font-serif">Môn Tin học - Thầy Toàn</h4>
+                  <p className="text-[10px] text-blue-200">Thầy Phạm Nhật Toàn • Trường THCS Ngô Quyền</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Upload File Section */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Cách 1: Tải ảnh từ thiết bị (Khuyên dùng)</label>
+                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-xl bg-indigo-50/40 hover:bg-indigo-50/70 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer">
+                  <Upload className="w-4 h-4 text-indigo-600" />
+                  <span>Chọn tệp logo (PNG, JPG, SVG, WebP)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        const base64 = event.target?.result as string;
+                        if (base64) {
+                          setLogoInputUrl(base64);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Cách 2: Hoặc dán đường link ảnh trực tiếp (URL)</label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/logo.png"
+                  value={logoInputUrl}
+                  onChange={(e) => setLogoInputUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setLogoInputUrl('/assets/aistudio/LOGO_WEB_05e2bec9.jpg');
+                  StorageService.setSiteLogo(null);
+                  setSiteLogo('/assets/aistudio/LOGO_WEB_05e2bec9.jpg');
+                  setShowLogoModal(false);
+                  setLogoToast('Đã khôi phục logo gốc Phạm Nhật Toàn');
+                  setTimeout(() => setLogoToast(null), 3000);
+                }}
+                className="px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                <span>Dùng logo gốc (PNT)</span>
+              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoModal(false)}
+                  className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = logoInputUrl.trim();
+                    StorageService.setSiteLogo(trimmed || null);
+                    setSiteLogo(trimmed || null);
+                    setShowLogoModal(false);
+                    setLogoToast('Đã lưu và cập nhật logo website thành công!');
+                    setTimeout(() => setLogoToast(null), 3000);
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                >
+                  <Check className="w-4 h-4 text-amber-300" />
+                  <span>Lưu & Áp dụng</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Xác nhận khôi phục dữ liệu mẫu gốc (Thay thế an toàn cho window.confirm) */}
+      {showResetConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 text-slate-800">
+            <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Xác nhận khôi phục dữ liệu gốc?</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Thao tác này sẽ đưa toàn bộ bài kiểm tra, tin tức và câu hỏi về trạng thái mẫu ban đầu của hệ thống.
+              </p>
+            </div>
+            <div className="flex items-center justify-center space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirmModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResetConfirmModal(false);
+                  onResetData();
+                }}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white transition-all shadow-md cursor-pointer"
+              >
+                Xác nhận khôi phục
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Logo Toast Notification */}
+      {logoToast && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900/95 text-white text-xs font-semibold shadow-2xl backdrop-blur-md border border-amber-400/40 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>{logoToast}</span>
+        </div>
+      )}
     </header>
   );
 };

@@ -7,7 +7,7 @@ export const GUEST_USER: User = {
   code: 'KHACH',
   avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
   email: 'khach@thcs.edu.vn',
-  school: 'Trường THCS Nguyễn Du',
+  school: 'Trường THCS Ngô Quyền',
 };
 
 export const INITIAL_USERS: User[] = [
@@ -21,7 +21,7 @@ export const INITIAL_USERS: User[] = [
     pin: '123456',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     email: 'haidang.9a1@thcs.edu.vn',
-    school: 'Trường THCS Nguyễn Du',
+    school: 'Trường THCS Ngô Quyền',
   },
   {
     id: 'user-student-2',
@@ -33,7 +33,7 @@ export const INITIAL_USERS: User[] = [
     pin: '123456',
     avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
     email: 'phuonglinh.9a1@thcs.edu.vn',
-    school: 'Trường THCS Nguyễn Du',
+    school: 'Trường THCS Ngô Quyền',
   },
   {
     id: 'user-student-3',
@@ -45,7 +45,7 @@ export const INITIAL_USERS: User[] = [
     pin: '123456',
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
     email: 'minhkhang.8a2@thcs.edu.vn',
-    school: 'Trường THCS Nguyễn Du',
+    school: 'Trường THCS Ngô Quyền',
   },
   {
     id: 'user-student-4',
@@ -57,7 +57,7 @@ export const INITIAL_USERS: User[] = [
     pin: '123456',
     avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
     email: 'hoangmai.7a3@thcs.edu.vn',
-    school: 'Trường THCS Nguyễn Du',
+    school: 'Trường THCS Ngô Quyền',
   },
   {
     id: 'user-student-5',
@@ -69,7 +69,7 @@ export const INITIAL_USERS: User[] = [
     pin: '123456',
     avatar: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=150&auto=format&fit=crop&q=80',
     email: 'quocbao.6a1@thcs.edu.vn',
-    school: 'Trường THCS Nguyễn Du',
+    school: 'Trường THCS Ngô Quyền',
   },
   {
     id: 'user-teacher-1',
@@ -501,7 +501,7 @@ export const INITIAL_NEWS: NewsArticle[] = [
     slug: 'ke-hoach-khao-sat-chat-luong-giua-ki-2',
     category: 'Thông báo chung',
     summary: 'Ban Giám hiệu nhà trường thông báo kế hoạch chi tiết, lịch thi trực tuyến và trực tiếp cho toàn thể học sinh khối 6, 7, 8, 9.',
-    content: `Trường THCS Nguyễn Du trân trọng thông báo đến toàn thể cán bộ giáo viên, phụ huynh và học sinh kế hoạch khảo sát chất lượng giữa học kỳ I năm học 2026 - 2027 như sau:
+    content: `Trường THCS Ngô Quyền trân trọng thông báo đến toàn thể cán bộ giáo viên, phụ huynh và học sinh kế hoạch khảo sát chất lượng giữa học kỳ I năm học 2026 - 2027 như sau:
 
 1. **Mục đích:**
 - Đánh giá mức độ tiếp thu kiến thức của học sinh theo chương trình GDPT 2018 sau nửa chặng đường của Học kỳ I.
@@ -553,7 +553,7 @@ Chúc các em học sinh ôn tập thật tốt và đạt kết quả cao nhấ
     slug: 'hoi-thi-stem-nghien-cuu-khoa-hoc-2026',
     category: 'Thông báo chung',
     summary: 'Hơn 30 dự án sáng tạo của các chi đội từ khối 6 đến khối 9 đã mang đến nhiều sản phẩm ứng dụng thiết thực, bảo vệ môi trường và chuyển đổi số.',
-    content: `Ngày 26/02/2026, Trường THCS Nguyễn Du đã tưng bừng tổ chức Vòng chung kết Ngày hội STEM và Nghiên cứu Khoa học Kỹ thuật dành cho học sinh THCS.
+    content: `Ngày 26/02/2026, Trường THCS Ngô Quyền đã tưng bừng tổ chức Vòng chung kết Ngày hội STEM và Nghiên cứu Khoa học Kỹ thuật dành cho học sinh THCS.
 
 Hội thi năm nay ghi nhận sự tham gia của 32 dự án xuất sắc thuộc 4 lĩnh vực chính:
 - Hệ thống nhúng và Trí tuệ nhân tạo học đường

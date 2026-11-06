@@ -661,15 +661,27 @@ export function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 mt-12 py-6 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 space-y-1">
-          <p className="font-bold text-slate-800">
-            HỆ THỐNG CỔNG THÔNG TIN & KHẢO THÍ TRỰC TUYẾN
-          </p>
+        <div className="max-w-7xl mx-auto px-4 space-y-2">
+          <div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('news')}
+              className="inline-flex items-center gap-2.5 font-bold text-slate-800 hover:text-blue-900 transition-colors cursor-pointer group"
+              title="Nhấn để về Trang chủ"
+            >
+              <img
+                src="/assets/aistudio/logo_web_16edd9d6.png"
+                alt="Logo Thầy Toàn - PNT"
+                className="w-7 h-7 object-contain rounded-md bg-white border border-slate-200 shadow-2xs group-hover:scale-110 transition-transform"
+              />
+              <span className="group-hover:underline">MÔN TIN HỌC - THẦY TOÀN (PHẠM NHẬT TOÀN) • TRƯỜNG THCS NGÔ QUYỀN</span>
+            </button>
+          </div>
           <p>
             Chuẩn hóa theo Chương trình Giáo dục Phổ thông 2018 • Tích hợp giám sát chống gian lận & Ngân hàng câu hỏi 4 mức độ
           </p>
           <p className="text-[11px] text-slate-400">
-            Bản quyền © 2025. Hệ thống vận hành ổn định trên mọi thiết bị máy tính, máy tính bảng và điện thoại di động.
+            Bản quyền © 2026. Hệ thống vận hành ổn định trên mọi thiết bị máy tính, máy tính bảng và điện thoại di động.
           </p>
         </div>
       </footer>
