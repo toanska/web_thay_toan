@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://main.thcsngoquyenit.gt.tc/sitemap.xml
+Sitemap: https://thaytoantinhoc.vercel.app/sitemap.xml
