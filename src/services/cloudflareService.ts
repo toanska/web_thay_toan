@@ -4,12 +4,12 @@ import { StorageService } from './storageService';
 const CF_CONFIG_KEY = 'thcs_cloudflare_config_v1';
 
 const DEFAULT_CONFIG: CloudflareConfig = {
-  workerUrl: '',
+  workerUrl: 'https://web-thay-toan.toanska.workers.dev',
   apiSecret: '',
   enabled: true,
   autoSync: true,
   autoSyncIntervalSeconds: 20,
-  status: 'idle',
+  status: 'connected',
 };
 
 // Full ready-to-use Cloudflare Worker JavaScript code
