@@ -486,11 +486,16 @@ export const StorageService = {
         }
       }
 
-      // 2. Merge Exams
-      if (Array.isArray(remoteData.exams) && remoteData.exams.length > 0) {
+      // 2. Sync Exams (Add new & remove deleted on remote)
+      if (Array.isArray(remoteData.exams)) {
         const localExams = this.getExams();
-        const localMap = new Map<string, Exam>(localExams.map(e => [e.id, e]));
-        let examsChanged = false;
+        const remoteExamIds = new Set(remoteData.exams.map((e: Exam) => e.id));
+        
+        // Check if any local exam was deleted on cloud
+        const filteredExams = localExams.filter(e => remoteExamIds.has(e.id));
+        
+        const localMap = new Map<string, Exam>(filteredExams.map(e => [e.id, e]));
+        let examsChanged = localExams.length !== filteredExams.length;
 
         remoteData.exams.forEach((remEx: Exam) => {
           if (!localMap.has(remEx.id)) {
@@ -505,11 +510,14 @@ export const StorageService = {
         }
       }
 
-      // 3. Merge Questions
-      if (Array.isArray(remoteData.questions) && remoteData.questions.length > 0) {
+      // 3. Sync Questions (Add new & remove deleted on remote)
+      if (Array.isArray(remoteData.questions)) {
         const localQuestions = this.getQuestions();
-        const localMap = new Map<string, Question>(localQuestions.map(q => [q.id, q]));
-        let qChanged = false;
+        const remoteQIds = new Set(remoteData.questions.map((q: Question) => q.id));
+        
+        const filteredQuestions = localQuestions.filter(q => remoteQIds.has(q.id));
+        const localMap = new Map<string, Question>(filteredQuestions.map(q => [q.id, q]));
+        let qChanged = localQuestions.length !== filteredQuestions.length;
 
         remoteData.questions.forEach((remQ: Question) => {
           if (!localMap.has(remQ.id)) {
@@ -524,11 +532,14 @@ export const StorageService = {
         }
       }
 
-      // 4. Merge News
-      if (Array.isArray(remoteData.news) && remoteData.news.length > 0) {
+      // 4. Sync News (Add new & remove deleted on remote)
+      if (Array.isArray(remoteData.news)) {
         const localNews = this.getNews();
-        const localMap = new Map<string, NewsArticle>(localNews.map(n => [n.id, n]));
-        let newsChanged = false;
+        const remoteNewsIds = new Set(remoteData.news.map((n: NewsArticle) => n.id));
+        
+        const filteredNews = localNews.filter(n => remoteNewsIds.has(n.id));
+        const localMap = new Map<string, NewsArticle>(filteredNews.map(n => [n.id, n]));
+        let newsChanged = localNews.length !== filteredNews.length;
 
         remoteData.news.forEach((remN: NewsArticle) => {
           if (!localMap.has(remN.id)) {
@@ -545,18 +556,20 @@ export const StorageService = {
         }
       }
 
-      // 5. Merge Users
-      if (Array.isArray(remoteData.users) && remoteData.users.length > 0) {
+      // 5. Sync Users (Add new & remove deleted on remote)
+      if (Array.isArray(remoteData.users)) {
         const localUsers = this.getUsers();
-        const localMap = new Map<string, User>(localUsers.map(u => [u.id, u]));
-        let usersChanged = false;
+        const remoteUserIds = new Set(remoteData.users.map((u: User) => u.id));
+        
+        const filteredUsers = localUsers.filter(u => remoteUserIds.has(u.id));
+        const localMap = new Map<string, User>(filteredUsers.map(u => [u.id, u]));
+        let usersChanged = localUsers.length !== filteredUsers.length;
 
         remoteData.users.forEach((remU: User) => {
           if (!localMap.has(remU.id)) {
             localMap.set(remU.id, remU);
             usersChanged = true;
           } else {
-            // If remote user has custom PIN, update if local doesn't
             const localU = localMap.get(remU.id)!;
             if (remU.pin && remU.pin !== localU.pin) {
               localMap.set(remU.id, { ...localU, pin: remU.pin });
@@ -571,11 +584,14 @@ export const StorageService = {
         }
       }
 
-      // 6. Merge Materials
-      if (Array.isArray(remoteData.materials) && remoteData.materials.length > 0) {
+      // 6. Sync Materials (Add new & remove deleted on remote)
+      if (Array.isArray(remoteData.materials)) {
         const localMat = this.getMaterials();
-        const localMap = new Map<string, LessonMaterial>(localMat.map(m => [m.id, m]));
-        let matChanged = false;
+        const remoteMatIds = new Set(remoteData.materials.map((m: LessonMaterial) => m.id));
+        
+        const filteredMat = localMat.filter(m => remoteMatIds.has(m.id));
+        const localMap = new Map<string, LessonMaterial>(filteredMat.map(m => [m.id, m]));
+        let matChanged = localMat.length !== filteredMat.length;
 
         remoteData.materials.forEach((remM: LessonMaterial) => {
           if (!localMap.has(remM.id)) {
