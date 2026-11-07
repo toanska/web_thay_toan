@@ -167,13 +167,14 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
     { id: 'news', label: 'Tin tức & Thông báo', icon: Newspaper, color: 'text-sky-600' },
     { id: 'materials', label: 'Bài giảng & Giáo án', icon: BookOpen, color: 'text-teal-600', badge: 'Mới' },
-    { id: 'score_lookup', label: 'Tra cứu điểm (ID Học sinh)', icon: Search, color: 'text-amber-600' },
-    { id: 'admin_portal', label: 'Trang Quản Trị Tổng Hợp', icon: ShieldCheck, color: 'text-rose-600', badge: 'VIP' },
+    { id: 'score_lookup', label: 'Tra cứu điểm', icon: Search, color: 'text-amber-600' },
+    { id: 'admin_portal', label: 'Trang Quản Trị', icon: ShieldCheck, color: 'text-rose-600', badge: 'VIP' },
+    { id: 'students', label: 'Quản Lý Tài Khoản', icon: Users, color: 'text-emerald-600' },
     { id: 'reports', label: 'Báo cáo & Phổ điểm', icon: BarChart3, color: 'text-purple-600' },
   ];
 
   const navItems = allNavItems.filter(item => {
-    if (item.id === 'admin_portal') {
+    if (item.id === 'admin_portal' || item.id === 'students') {
       return isAuthorizedToManageStudents;
     }
     if (item.id === 'reports' && (currentUser.role === 'guest' || currentUser.role === 'student')) {
@@ -248,7 +249,17 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          <div className="flex items-center space-x-2 sm:space-x-4 text-xs">
+          <div className="flex items-center space-x-2 sm:space-x-3 text-xs">
+            {/* School Motto / Academic Year Tag in Top Banner */}
+            <div className="hidden xl:flex items-center space-x-2.5 text-xs font-medium bg-white/10 px-3 py-1.5 rounded-full border border-white/15">
+              <span className="inline-flex items-center gap-1.5 text-emerald-300 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Học kỳ I (2026 - 2027)
+              </span>
+              <span className="text-white/30">|</span>
+              <span className="text-amber-200 italic font-serif text-[11px]">"Tận tâm - Trí tuệ - Khát vọng"</span>
+            </div>
+
             {/* Quick Role Switcher */}
             <div className="relative" ref={userMenuRef}>
               <button
@@ -353,6 +364,16 @@ export const Header: React.FC<HeaderProps> = ({
                             >
                               <ShieldCheck className="w-4 h-4 text-rose-600" />
                               <span>Trang Quản Trị Tổng Hợp</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveTab('admin_portal');
+                                setShowUserMenu(false);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Database className="w-4 h-4 text-indigo-600" />
+                              <span>Ngân Hàng Câu Hỏi & Đề Thi</span>
                             </button>
                             <button
                               onClick={() => {
@@ -545,9 +566,9 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Main Navigation Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-14">
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 overflow-x-auto no-scrollbar whitespace-nowrap py-1">
+        <div className="flex items-center justify-between min-h-14 py-1.5 min-w-0">
+          {/* Desktop Nav - Flex-wrap enabled with clean spacing so no buttons are EVER clipped or cut off */}
+          <nav className="hidden md:flex flex-wrap items-center gap-1 lg:gap-1.5 py-1 w-full min-w-0">
             {navItems.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -555,37 +576,34 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  className={`flex items-center space-x-1.5 lg:space-x-2 px-2.5 lg:px-3 py-1.5 lg:py-2 rounded-xl text-xs lg:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                     isActive
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                      ? 'bg-blue-900 text-white shadow-xs ring-1 ring-blue-900'
+                      : 'text-slate-700 hover:text-blue-900 hover:bg-slate-100'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                  <span>{item.label}</span>
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-amber-300' : item.color}`} />
+                  <span className="whitespace-nowrap">{item.label}</span>
+                  {item.badge && (
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold leading-none ${
+                      isActive ? 'bg-amber-400 text-slate-900' : 'bg-rose-100 text-rose-700 border border-rose-200'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </nav>
 
-          {/* School Motto / Academic Year Tag */}
-          <div className="hidden lg:flex items-center space-x-3 text-xs text-slate-500 font-medium">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-              Học kỳ I (2026 - 2027)
-            </span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-600 italic">"Tận tâm - Trí tuệ - Khát vọng"</span>
-          </div>
-
-          {/* Mobile menu button */}
+          {/* Mobile menu header */}
           <div className="flex md:hidden items-center justify-between w-full">
-            <span className="text-sm font-bold text-slate-800">
+            <span className="text-sm font-bold text-slate-800 truncate">
               {navItems.find(i => i.id === activeTab)?.label}
             </span>
             <button
               onClick={() => setShowMobileNav(!showMobileNav)}
-              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 shrink-0 cursor-pointer"
             >
               {showMobileNav ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>

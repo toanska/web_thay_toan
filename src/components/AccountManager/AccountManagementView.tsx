@@ -131,7 +131,7 @@ export function getClassCodeDigits(className?: string, grade?: number): string {
 export function formatStudentCode(className?: string, grade?: number, sttIndex: number = 1, year: number = 2026): string {
   const classDigits = getClassCodeDigits(className, grade);
   const sttStr = String(sttIndex).padStart(2, '0');
-  return `${year}${classDigits}${sttStr}`;
+  return `HS-${year}${classDigits}${sttStr}`;
 }
 
 function generateSuggestedCode(role: UserRole, grade: GradeLevel, existingCount: number, subject?: string, className?: string): string {
@@ -388,7 +388,7 @@ Bùi Thảo Nhi`
 
     onSaveUsersBatch(updatedStudents);
     setShowRecalculateModal(false);
-    setToastMessage(`Đã cập nhật mã định danh chuẩn [Năm+Lớp+STT] cho ${updatedStudents.length} học sinh thành công! (Ví dụ: Nguyễn Văn A lớp 9A1 -> 20269101)`);
+    setToastMessage(`Đã cập nhật mã định danh chuẩn [HS-Năm+Lớp+STT] cho ${updatedStudents.length} học sinh thành công! (Ví dụ: Nguyễn Văn A lớp 9A1 -> HS-20269101)`);
     setTimeout(() => setToastMessage(null), 4500);
   };
 
@@ -1764,16 +1764,17 @@ Bùi Thảo Nhi`
               </p>
               <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-200 text-left text-xs space-y-1.5 text-indigo-950 font-medium">
                 <div className="font-bold text-indigo-900 border-b border-indigo-200/60 pb-1">
-                  📐 Công thức: <span className="font-mono bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-900">[Năm][MãLớp][SốThứTự]</span>
+                  📐 Công thức: <span className="font-mono bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-900">HS-[Năm][MãLớp][SốThứTự]</span>
                 </div>
                 <div className="text-[11px] text-indigo-800 leading-relaxed">
+                  • <strong>Tiền tố:</strong> HS-<br />
                   • <strong>Năm:</strong> 2026 (Năm học hiện tại)<br />
                   • <strong>Mã Lớp:</strong> 9A1 → 91, 8A2 → 82, 7A3 → 73, 6A1 → 61<br />
                   • <strong>Số Thứ Tự (STT):</strong> 01, 02, 03... (xếp theo bảng chữ cái theo lớp)
                 </div>
                 <div className="pt-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/60 p-2 rounded-lg border border-emerald-200/80">
                   ✨ Ví dụ: Nguyễn Văn A • Lớp 9A1 • Số thứ tự 1 <br />
-                  ➡️ Mã học sinh: <strong className="font-mono text-emerald-950 text-xs">20269101</strong>
+                  ➡️ Mã học sinh: <strong className="font-mono text-emerald-950 text-xs">HS-20269101</strong>
                 </div>
               </div>
             </div>

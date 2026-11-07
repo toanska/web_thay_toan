@@ -218,6 +218,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setActiveSection('questions')}
+            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Mở ngay Ngân Hàng Câu Hỏi"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Ngân Hàng Câu Hỏi ({questions.length})</span>
+          </button>
+          <button
             onClick={() => onNavigateToTab('students')}
             className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
           >
@@ -234,8 +242,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Navigation Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      {/* Navigation Pills (flex-wrap so no tab is hidden or pushed off-screen) */}
+      <div className="flex flex-wrap items-center gap-2 py-1">
         {sections.map(s => {
           const Icon = s.icon;
           const isActive = activeSection === s.id;

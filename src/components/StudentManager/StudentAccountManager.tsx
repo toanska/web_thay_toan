@@ -86,11 +86,19 @@ function generateSuggestedCode(grade: GradeLevel, existingCount: number, classNa
   let classDigits = '91';
   if (digitsOnly.length >= 2) {
     classDigits = digitsOnly;
+  } else if (digitsOnly.length === 1) {
+    const letterMatch = cleanClass.match(/[A-Z]/);
+    let sec = '1';
+    if (letterMatch) {
+      const charCode = letterMatch[0].charCodeAt(0) - 64;
+      sec = String(Math.max(1, Math.min(9, charCode)));
+    }
+    classDigits = `${digitsOnly}${sec}`;
   } else {
     classDigits = `${grade || 9}1`;
   }
   const index = String(existingCount + 1).padStart(2, '0');
-  return `${year}${classDigits}${index}`;
+  return `HS-${year}${classDigits}${index}`;
 }
 
 export const StudentAccountManager: React.FC<StudentAccountManagerProps> = ({
@@ -262,7 +270,9 @@ Bùi Thảo Nhi`
       }
 
       const seq = String(studentList.length + idx + 1).padStart(2, '0');
-      customCode = `HS-${year}${String(batchGrade).padStart(2, '0')}${seq}`;
+      const clsClean = (customClass || `${batchGrade}A1`).toUpperCase().replace(/[^0-9]/g, '');
+      const clsDigits = clsClean.length >= 2 ? clsClean : `${batchGrade}1`;
+      customCode = `HS-2026${clsDigits}${seq}`;
       const email = generateSuggestedEmail(clean, customClass);
       const avatar = DEFAULT_AVATARS[idx % DEFAULT_AVATARS.length];
 
@@ -292,7 +302,6 @@ Bùi Thảo Nhi`
       setBatchRawText(text);
       // Auto trigger parsing
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-      const year = new Date().getFullYear();
       const generated: User[] = lines.map((line, idx) => {
         let clean = line.replace(/^\d+[\.\s:\-_]+/, '').replace(/["']/g, '').trim();
         let customClass = batchClass;
@@ -302,7 +311,9 @@ Bùi Thảo Nhi`
           if (parts[1]) customClass = parts[1];
         }
         const seq = String(studentList.length + idx + 1).padStart(2, '0');
-        const customCode = `HS-${year}${String(batchGrade).padStart(2, '0')}${seq}`;
+        const clsClean = (customClass || `${batchGrade}A1`).toUpperCase().replace(/[^0-9]/g, '');
+        const clsDigits = clsClean.length >= 2 ? clsClean : `${batchGrade}1`;
+        const customCode = `HS-2026${clsDigits}${seq}`;
         const email = generateSuggestedEmail(clean, customClass);
         const avatar = DEFAULT_AVATARS[idx % DEFAULT_AVATARS.length];
 
