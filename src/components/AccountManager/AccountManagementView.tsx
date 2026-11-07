@@ -763,16 +763,34 @@ Bùi Thảo Nhi`
 
       {/* Main Accounts Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-2">
             <Users className="w-4 h-4 text-blue-600" />
             <h3 className="font-bold text-sm text-slate-900">
               Danh Sách Tài Khoản Hệ Thống ({filteredUsers.length})
             </h3>
+            {selectedUserIds.length > 0 && (
+              <span className="ml-2 px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
+                Đã chọn {selectedUserIds.length}
+              </span>
+            )}
           </div>
-          <div className="text-[11px] text-slate-500 flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span> Đang hoạt động
-            <span className="inline-block w-2 h-2 rounded-full bg-rose-500 ml-2"></span> Tạm khóa
+
+          <div className="flex items-center gap-3">
+            {selectedUserIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowBatchDeleteModal(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xóa {selectedUserIds.length} tài khoản đã chọn</span>
+              </button>
+            )}
+            <div className="text-[11px] text-slate-500 flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span> Đang hoạt động
+              <span className="inline-block w-2 h-2 rounded-full bg-rose-500 ml-2"></span> Tạm khóa
+            </div>
           </div>
         </div>
 
@@ -789,6 +807,24 @@ Bùi Thảo Nhi`
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
                 <tr>
+                  <th className="px-4 py-3.5 text-center w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                      checked={
+                        filteredUsers.length > 0 &&
+                        filteredUsers.every(u => selectedUserIds.includes(u.id))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedUserIds(filteredUsers.map(u => u.id));
+                        } else {
+                          setSelectedUserIds([]);
+                        }
+                      }}
+                      title="Chọn tất cả danh sách đang hiển thị"
+                    />
+                  </th>
                   <th className="px-5 py-3.5">Họ và tên</th>
                   <th className="px-4 py-3.5">Mã ID (Định danh)</th>
                   <th className="px-4 py-3.5">Vai trò & Phân môn / Lớp</th>
@@ -802,15 +838,32 @@ Bùi Thảo Nhi`
                 {filteredUsers.map((user) => {
                   const isCurrent = currentUser.id === user.id;
                   const isLocked = user.status === 'locked';
+                  const isSelected = selectedUserIds.includes(user.id);
                   const studentStats = user.role === 'student' ? getStudentStats(user.id) : null;
 
                   return (
                     <tr 
                       key={user.id} 
                       className={`hover:bg-blue-50/40 transition-colors ${
-                        isCurrent ? 'bg-blue-50/80' : isLocked ? 'bg-slate-50/70 opacity-75' : ''
+                        isSelected ? 'bg-blue-50/90' : isCurrent ? 'bg-blue-50/40' : isLocked ? 'bg-slate-50/70 opacity-75' : ''
                       }`}
                     >
+                      {/* Checkbox column */}
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedUserIds([...selectedUserIds, user.id]);
+                            } else {
+                              setSelectedUserIds(selectedUserIds.filter(id => id !== user.id));
+                            }
+                          }}
+                        />
+                      </td>
+
                       {/* Name & Avatar */}
                       <td className="px-5 py-3">
                         <div className="flex items-center space-x-3">
@@ -1533,6 +1586,7 @@ Bùi Thảo Nhi`
                 type="button"
                 onClick={() => {
                   onDeleteUser(userToDelete.id);
+                  setSelectedUserIds(selectedUserIds.filter(id => id !== userToDelete.id));
                   setToastMessage(`Đã xóa vĩnh viễn tài khoản "${userToDelete.name}" (${userToDelete.code})!`);
                   setTimeout(() => setToastMessage(null), 3500);
                   setUserToDelete(null);
@@ -1541,6 +1595,76 @@ Bùi Thảo Nhi`
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Xác Nhận Xóa</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BATCH DELETE CONFIRMATION MODAL */}
+      {showBatchDeleteModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-bold text-slate-900">
+                Xác Nhận Xóa Hàng Loạt {selectedUserIds.length} Tài Khoản
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Bạn có chắc chắn muốn xóa vĩnh viễn <strong className="text-rose-600">{selectedUserIds.length} tài khoản</strong> đã chọn khỏi hệ thống?
+              </p>
+              <div className="max-h-36 overflow-y-auto p-3 bg-slate-50 rounded-xl border border-slate-200 text-left text-xs space-y-1">
+                {users.filter(u => selectedUserIds.includes(u.id)).map(u => (
+                  <div key={u.id} className="flex items-center justify-between text-slate-700">
+                    <span className="font-semibold truncate max-w-[200px]">{u.name}</span>
+                    <span className="font-mono text-slate-400 text-[11px]">{u.code}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-rose-600 bg-rose-50 p-2 rounded-lg font-medium">
+                ⚠️ Lưu ý: Các tài khoản đang đăng nhập hoặc tài khoản được bảo vệ (như Thầy Toàn) sẽ tự động bỏ qua.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowBatchDeleteModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const safeToDeleteIds = selectedUserIds.filter(id => {
+                    const target = users.find(u => u.id === id);
+                    return id !== currentUser.id && target?.code !== 'GV-TINHOC01';
+                  });
+
+                  if (safeToDeleteIds.length === 0) {
+                    setToastMessage('Các tài khoản được chọn đều được bảo vệ, không thể xóa!');
+                    setTimeout(() => setToastMessage(null), 3500);
+                    setShowBatchDeleteModal(false);
+                    return;
+                  }
+
+                  if (onDeleteUsersBatch) {
+                    onDeleteUsersBatch(safeToDeleteIds);
+                  } else {
+                    safeToDeleteIds.forEach(id => onDeleteUser(id));
+                  }
+
+                  setToastMessage(`Đã xóa vĩnh viễn ${safeToDeleteIds.length} tài khoản thành công!`);
+                  setTimeout(() => setToastMessage(null), 3500);
+                  setSelectedUserIds([]);
+                  setShowBatchDeleteModal(false);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xác Nhận Xóa {selectedUserIds.length} Tài Khoản</span>
               </button>
             </div>
           </div>

@@ -140,8 +140,8 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim() && searchClass === 'all') {
-      alert('Vui lòng nhập Mã học sinh (ID) hoặc Họ tên, hoặc chọn Lớp học để tra cứu.');
+    if (!searchQuery.trim()) {
+      alert('Vui lòng nhập chính xác Mã học sinh (ID) hoặc Họ và tên học sinh để tra cứu điểm cá nhân!');
       return;
     }
     setActiveQuery(searchQuery.trim());
@@ -191,11 +191,11 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Tra Cứu Điểm Bài Kiểm Tra Học Sinh</h2>
-          <p className="text-xs text-slate-500">Nhập mã định danh học sinh (ID) hoặc họ tên và lớp để xem điểm và lịch sử khảo thí</p>
+          <p className="text-xs text-slate-500">Nhập chính xác Mã định danh học sinh (ID) hoặc Họ tên cá nhân để tra cứu bảng điểm riêng</p>
         </div>
       </div>
 
-      {/* Search Bar - No preset sample students */}
+      {/* Search Bar - Strictly for 1 student per lookup */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
         <form onSubmit={handleSearchSubmit} className="flex flex-col md:flex-row items-center gap-3">
           {/* Input ID or Name */}
@@ -205,12 +205,12 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Nhập Mã học sinh / ID (VD: HS-20240901) hoặc Họ và tên..."
+              placeholder="Nhập chính xác Mã học sinh / ID (VD: HS-20240901) hoặc Họ và tên học sinh..."
               className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
             />
           </div>
 
-          {/* Select Class */}
+          {/* Select Class Filter (Optional filter to narrow down single student) */}
           <div className="w-full md:w-56 shrink-0">
             <select
               value={searchClass}
@@ -235,12 +235,12 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
         </form>
       </div>
 
-      {/* If Multiple Candidate Students Found from Query */}
+      {/* If Multiple Candidate Students Found from Query: force user to select ONLY ONE student */}
       {searchResults && searchResults.candidateStudents.length > 1 && !searchResults.activeStudent && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
           <div className="flex items-center gap-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3">
             <UserCheck className="w-4 h-4 text-blue-600" />
-            <span>Tìm thấy {searchResults.candidateStudents.length} học sinh phù hợp. Vui lòng chọn học sinh cần xem bảng điểm:</span>
+            <span>Tìm thấy {searchResults.candidateStudents.length} học sinh trùng khớp. Vui lòng chọn 1 học sinh duy nhất để xem bảng điểm cá nhân:</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -256,7 +256,7 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
                     Mã HS: <span className="font-mono font-bold text-blue-700">{st.code}</span> • Lớp {st.className}
                   </div>
                 </div>
-                <span className="text-xs font-bold text-blue-600 group-hover:underline">Xem điểm →</span>
+                <span className="text-xs font-bold text-blue-600 group-hover:underline">Xem điểm cá nhân →</span>
               </button>
             ))}
           </div>
