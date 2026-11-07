@@ -60,6 +60,7 @@ interface AdminDashboardViewProps {
   onSaveUser: (user: User) => void;
   onSaveUsersBatch?: (users: User[]) => void;
   onDeleteUser: (id: string) => void;
+  onDeleteUsersBatch?: (ids: string[]) => void;
   onSwitchUser?: (user: User) => void;
   onOpenCreateNews: () => void;
   onEditNews: (news: NewsArticle) => void;
@@ -97,6 +98,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onSaveUser,
   onSaveUsersBatch,
   onDeleteUser,
+  onDeleteUsersBatch,
   onSwitchUser,
   onOpenCreateNews,
   onEditNews,
@@ -456,6 +458,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             onSaveUser={onSaveUser}
             onSaveUsersBatch={onSaveUsersBatch || (() => {})}
             onDeleteUser={onDeleteUser}
+            onDeleteUsersBatch={onDeleteUsersBatch}
             onSwitchUser={onSwitchUser || (() => {})}
             onNavigateToLogin={() => onNavigateToTab('login')}
           />

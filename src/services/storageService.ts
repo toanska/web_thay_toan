@@ -200,6 +200,13 @@ export const StorageService = {
     setItem(STORAGE_KEYS.USERS, users);
   },
 
+  deleteUsersBatch(ids: string[]): User[] {
+    const idSet = new Set(ids);
+    const users = this.getUsers().filter(u => !idSet.has(u.id));
+    setItem(STORAGE_KEYS.USERS, users);
+    return users;
+  },
+
   // Site Logo Management
   getSiteLogo(): string {
     if (typeof localStorage === 'undefined') return DEFAULT_SITE_LOGO;

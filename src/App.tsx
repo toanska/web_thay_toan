@@ -332,6 +332,14 @@ export function App() {
     }
   };
 
+  const handleDeleteUsersBatch = (ids: string[]) => {
+    const updatedUsers = StorageService.deleteUsersBatch(ids);
+    setAvailableUsers(updatedUsers);
+    if (ids.includes(currentUser.id)) {
+      handleUserChange(updatedUsers[0]);
+    }
+  };
+
   // --- Question Bank handlers ---
   const handleSaveQuestion = (question: Question) => {
     StorageService.saveQuestion(question);
@@ -533,6 +541,7 @@ export function App() {
             onSaveUser={handleSaveUser}
             onSaveUsersBatch={handleSaveUsersBatch}
             onDeleteUser={handleDeleteUser}
+            onDeleteUsersBatch={handleDeleteUsersBatch}
             onSwitchUser={handleUserChange}
             onOpenCreateNews={() => setEditingNews(null)}
             onEditNews={(art) => setEditingNews(art)}
@@ -568,6 +577,7 @@ export function App() {
               onSaveUser={handleSaveUser}
               onSaveUsersBatch={handleSaveUsersBatch}
               onDeleteUser={handleDeleteUser}
+              onDeleteUsersBatch={handleDeleteUsersBatch}
               onSwitchUser={(user) => {
                 handleUserChange(user);
               }}

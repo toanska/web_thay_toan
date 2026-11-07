@@ -34,7 +34,9 @@ import {
   Settings,
   Briefcase,
   SlidersHorizontal,
-  ChevronRight
+  ChevronRight,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { User, UserRole, GradeLevel, ExamAttempt } from '../../types';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
@@ -46,6 +48,7 @@ interface AccountManagementViewProps {
   onSaveUser: (user: User) => void;
   onSaveUsersBatch: (users: User[]) => void;
   onDeleteUser: (id: string) => void;
+  onDeleteUsersBatch?: (ids: string[]) => void;
   onSwitchUser: (user: User) => void;
   onNavigateToLogin: () => void;
 }
@@ -124,6 +127,7 @@ export const AccountManagementView: React.FC<AccountManagementViewProps> = ({
   onSaveUser,
   onSaveUsersBatch,
   onDeleteUser,
+  onDeleteUsersBatch,
   onSwitchUser,
   onNavigateToLogin
 }) => {
@@ -143,6 +147,8 @@ export const AccountManagementView: React.FC<AccountManagementViewProps> = ({
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Form States
