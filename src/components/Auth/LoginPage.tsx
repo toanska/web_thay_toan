@@ -90,45 +90,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    onLoginUser(matched);
-    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name} (${matched.role === 'teacher' ? 'Giáo viên' : matched.role === 'admin' ? 'Ban Giám Hiệu' : 'Học sinh'})`);
-    setUsernameInput('');
-    setPasswordInput('');
+    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name}. Đang tự động chuyển về trang chủ...`);
+    setTimeout(() => {
+      onLoginUser(matched);
+      onNavigateToTab('exams');
+      setUsernameInput('');
+      setPasswordInput('');
+    }, 400);
   };
 
   const canCreateContent = currentUser.role === 'teacher' || currentUser.role === 'admin';
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto py-2">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              Cổng Xác Thực & Quản Trị Hệ Thống
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Đăng Nhập Tài Khoản & Phân Quyền
-            </h2>
-            <p className="text-blue-100 text-sm leading-relaxed">
-              Đăng nhập tài khoản Giáo viên hoặc Ban Giám Hiệu để có quyền đăng tin tức thông báo, tạo bài kiểm tra trực tuyến và giám sát khảo thí.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-center">
-              <span className="text-[10px] text-blue-200 uppercase font-bold block">Tài Khoản Hiện Tại</span>
-              <span className="text-sm font-extrabold text-amber-300 block truncate max-w-[160px]">{currentUser.name}</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase inline-block mt-1 ${
-                currentUser.role === 'guest' ? 'bg-slate-200 text-slate-800' : 'bg-white/20 text-white'
-              }`}>
-                {currentUser.role === 'guest' ? 'Khách truy cập' : currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-6 max-w-5xl mx-auto py-2">
 
       {/* Main Login Box (Placed right at the top for immediate access) */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">

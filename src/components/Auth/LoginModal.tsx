@@ -77,14 +77,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    onLoginUser(matched);
-    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name}.`);
+    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name}. Đang tự động chuyển về trang chủ...`);
     setTimeout(() => {
+      onLoginUser(matched);
       onClose();
       setUsernameInput('');
       setPasswordInput('');
       setSuccessMessage('');
-    }, 800);
+    }, 400);
   };
 
   return (

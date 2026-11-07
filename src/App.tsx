@@ -195,18 +195,14 @@ export function App() {
   const handleUserChange = (user: User) => {
     setCurrentUser(user);
     StorageService.setCurrentUser(user);
-    const isTeacherOrAdmin = user.role === 'admin' || user.role === 'teacher';
-    if ((activeTab === 'students' || activeTab === 'admin_portal') && !isTeacherToanOrAdmin(user)) {
-      setActiveTab('exams');
-    } else if (activeTab === 'reports' && !isTeacherOrAdmin) {
-      setActiveTab('exams');
-    }
+    // Tự động chuyển đến trang chủ (Bài kiểm tra trực tuyến) sau khi đăng nhập tài khoản
+    setActiveTab('exams');
   };
 
   const handleLogout = () => {
     StorageService.logoutUser();
     setCurrentUser(StorageService.getCurrentUser());
-    setActiveTab('news');
+    setActiveTab('exams');
   };
 
   // --- Backup & Restore handlers ---
