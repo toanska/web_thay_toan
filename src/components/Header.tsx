@@ -547,7 +547,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
+          <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 overflow-x-auto no-scrollbar whitespace-nowrap py-1">
             {navItems.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;

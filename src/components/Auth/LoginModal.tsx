@@ -53,12 +53,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Match user by email, code or name
-    const matched = users.find(u => 
-      u.email.toLowerCase() === query ||
-      u.code.toLowerCase() === query ||
-      u.name.toLowerCase() === query
-    );
+    // Match user by email, code, name or phone with safe optional checking & sanitized code check
+    const matched = users.find(u => {
+      const emailMatch = u.email ? u.email.trim().toLowerCase() === query : false;
+      const codeMatch = u.code ? u.code.trim().toLowerCase() === query : false;
+      const nameMatch = u.name ? u.name.trim().toLowerCase() === query : false;
+      const phoneMatch = u.phone ? u.phone.trim().toLowerCase() === query : false;
+      
+      const sanitizedCode = u.code ? u.code.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+      const sanitizedQuery = query.replace(/[^a-zA-Z0-9]/g, '');
+      const sanitizedCodeMatch = Boolean(sanitizedCode && sanitizedQuery && sanitizedCode === sanitizedQuery);
+
+      return emailMatch || codeMatch || nameMatch || phoneMatch || sanitizedCodeMatch;
+    });
 
     if (!matched) {
       setErrorMessage('Không tìm thấy tài khoản! Vui lòng kiểm tra lại Mã định danh hoặc Email.');

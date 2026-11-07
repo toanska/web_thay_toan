@@ -79,10 +79,18 @@ function generateSuggestedEmail(fullName: string, className: string): string {
   return `${firstName}${initials}.${cleanClass || 'hs'}@thcs.edu.vn`;
 }
 
-function generateSuggestedCode(grade: GradeLevel, existingCount: number): string {
-  const year = new Date().getFullYear();
+function generateSuggestedCode(grade: GradeLevel, existingCount: number, className?: string): string {
+  const year = 2026;
+  const cleanClass = (className || `9A1`).trim().toUpperCase();
+  const digitsOnly = cleanClass.replace(/[^0-9]/g, '');
+  let classDigits = '91';
+  if (digitsOnly.length >= 2) {
+    classDigits = digitsOnly;
+  } else {
+    classDigits = `${grade || 9}1`;
+  }
   const index = String(existingCount + 1).padStart(2, '0');
-  return `HS-${year}${String(grade).padStart(2, '0')}${index}`;
+  return `${year}${classDigits}${index}`;
 }
 
 export const StudentAccountManager: React.FC<StudentAccountManagerProps> = ({

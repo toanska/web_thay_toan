@@ -107,15 +107,43 @@ function generateSuggestedEmail(fullName: string, role: UserRole, className?: st
   }
 }
 
-function generateSuggestedCode(role: UserRole, grade: GradeLevel, existingCount: number, subject?: string): string {
-  const year = new Date().getFullYear();
-  const index = String(existingCount + 1).padStart(2, '0');
+export function getClassCodeDigits(className?: string, grade?: number): string {
+  if (!className) {
+    return `${grade || 9}1`;
+  }
+  const clean = className.trim().toUpperCase();
+  const digitsOnly = clean.replace(/[^0-9]/g, '');
+  if (digitsOnly.length >= 2) {
+    return digitsOnly;
+  } else if (digitsOnly.length === 1) {
+    const letterMatch = clean.match(/[A-Z]/);
+    let sec = '1';
+    if (letterMatch) {
+      const charCode = letterMatch[0].charCodeAt(0) - 64; // A=1, B=2, C=3...
+      sec = String(Math.max(1, Math.min(9, charCode)));
+    }
+    return `${digitsOnly}${sec}`;
+  } else {
+    return `${grade || 9}1`;
+  }
+}
+
+export function formatStudentCode(className?: string, grade?: number, sttIndex: number = 1, year: number = 2026): string {
+  const classDigits = getClassCodeDigits(className, grade);
+  const sttStr = String(sttIndex).padStart(2, '0');
+  return `${year}${classDigits}${sttStr}`;
+}
+
+function generateSuggestedCode(role: UserRole, grade: GradeLevel, existingCount: number, subject?: string, className?: string): string {
+  const year = 2026;
   if (role === 'student') {
-    return `HS-${year}${String(grade).padStart(2, '0')}${index}`;
+    return formatStudentCode(className, grade, existingCount + 1, year);
   } else if (role === 'teacher') {
+    const index = String(existingCount + 1).padStart(2, '0');
     const subTag = subject?.includes('Toán') ? 'TOAN' : 'TINHOC';
     return `GV-${subTag}${index}`;
   } else {
+    const index = String(existingCount + 1).padStart(2, '0');
     return `ADMIN-${index}`;
   }
 }
@@ -322,6 +350,48 @@ Bùi Thảo Nhi`
     }
   };
 
+  // Recalculate code for all student accounts according to rule: Năm (2026) + MãLớp (9A1 -> 91) + STT (01, 02...)
+  const [showRecalculateModal, setShowRecalculateModal] = useState(false);
+
+  const handleRecalculateAllStudentCodes = () => {
+    const studentUsers = users.filter(u => u.role === 'student');
+    if (studentUsers.length === 0) {
+      setToastMessage('Không tìm thấy học sinh nào trong hệ thống!');
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+
+    // Group students by class name
+    const classGroups: Record<string, User[]> = {};
+    studentUsers.forEach(s => {
+      const clsKey = (s.className || `Khối ${s.grade || 9}`).trim().toUpperCase();
+      if (!classGroups[clsKey]) classGroups[clsKey] = [];
+      classGroups[clsKey].push(s);
+    });
+
+    const sortedClassNames = Object.keys(classGroups).sort((a, b) => a.localeCompare(b, 'vi'));
+    const updatedStudents: User[] = [];
+    const year = 2026;
+
+    sortedClassNames.forEach(clsKey => {
+      const classList = classGroups[clsKey];
+      // Sort alphabetically by student full name within class
+      classList.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+      classList.forEach((st, idx) => {
+        const newCode = formatStudentCode(st.className, st.grade, idx + 1, year);
+        updatedStudents.push({
+          ...st,
+          code: newCode
+        });
+      });
+    });
+
+    onSaveUsersBatch(updatedStudents);
+    setShowRecalculateModal(false);
+    setToastMessage(`Đã cập nhật mã định danh chuẩn [Năm+Lớp+STT] cho ${updatedStudents.length} học sinh thành công! (Ví dụ: Nguyễn Văn A lớp 9A1 -> 20269101)`);
+    setTimeout(() => setToastMessage(null), 4500);
+  };
+
   // Parse Batch text
   const handleParseBatchText = () => {
     const lines = batchRawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
@@ -331,7 +401,7 @@ Bùi Thảo Nhi`
     }
 
     const currentCount = users.filter(u => u.role === batchRole).length;
-    const year = new Date().getFullYear();
+    const year = 2026;
 
     const generated: User[] = lines.map((line, idx) => {
       let clean = line.replace(/^\d+[\.\s:\-_]+/, '').trim();
@@ -348,7 +418,7 @@ Bùi Thảo Nhi`
 
       const seq = String(currentCount + idx + 1).padStart(2, '0');
       if (batchRole === 'student') {
-        customCode = `HS-${year}${String(batchGrade).padStart(2, '0')}${seq}`;
+        customCode = formatStudentCode(customClass, batchGrade, idx + 1, year);
       } else if (batchRole === 'teacher') {
         customCode = `GV-TINHOC${seq}`;
       } else {
@@ -391,7 +461,7 @@ Bùi Thảo Nhi`
     const ws = XLSX.utils.aoa_to_sheet(sampleRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Danh_Sach_Hoc_Sinh');
-    XLSX.writeFile(wb, 'Mau_Danh_Sach_Hoc_Sinh_THCS_NguyenDu.xlsx');
+    XLSX.writeFile(wb, 'Mau_Danh_Sach_Hoc_Sinh_THCS_NgoQuyen.xlsx');
   };
 
   // Upload File for Batch (.xlsx, .xls, .csv, .txt)
@@ -415,7 +485,6 @@ Bùi Thảo Nhi`
           const strCells = row.map(c => String(c ?? '').trim()).filter(Boolean);
           if (strCells.length === 0) return;
           const joined = strCells.join(' ').toLowerCase();
-          // Skip header if contains 'stt', 'họ', 'tên', 'name', 'lớp'
           if (rIdx === 0 && (joined.includes('họ') || joined.includes('tên') || joined.includes('stt') || joined.includes('name'))) {
             return;
           }
@@ -442,7 +511,7 @@ Bùi Thảo Nhi`
 
       setBatchRawText(lines.join('\n'));
       const currentCount = users.filter(u => u.role === batchRole).length;
-      const year = new Date().getFullYear();
+      const year = 2026;
 
       const generated: User[] = lines.map((line, idx) => {
         let clean = line.replace(/^\d+[\.\s:\-_]+/, '').replace(/["']/g, '').trim();
@@ -454,7 +523,7 @@ Bùi Thảo Nhi`
         }
         const seq = String(currentCount + idx + 1).padStart(2, '0');
         const customCode = batchRole === 'student' 
-          ? `HS-${year}${String(batchGrade).padStart(2, '0')}${seq}`
+          ? formatStudentCode(customClass, batchGrade, idx + 1, year)
           : `GV-TINHOC${seq}`;
         const email = generateSuggestedEmail(clean, batchRole, customClass, batchSubject);
         const avatars = batchRole === 'student' ? DEFAULT_AVATARS_STUDENT : DEFAULT_AVATARS_TEACHER;
@@ -579,6 +648,14 @@ Bùi Thảo Nhi`
           >
             <Sparkles className="w-4 h-4" />
             <span>📥 Nhập Hàng Loạt</span>
+          </button>
+          <button
+            onClick={() => setShowRecalculateModal(true)}
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+            title="Tự động cập nhật mã học sinh theo chuẩn: [Năm][MãLớp][STT] (Ví dụ: 9A1 số 1 -> 20269101)"
+          >
+            <RefreshCw className="w-4 h-4 text-indigo-200" />
+            <span>🔄 Cập Nhật Mã HS (Năm+Lớp+STT)</span>
           </button>
         </div>
       </div>
@@ -1665,6 +1742,56 @@ Bùi Thảo Nhi`
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Xác Nhận Xóa {selectedUserIds.length} Tài Khoản</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECALCULATE CODES CONFIRMATION MODAL */}
+      {showRecalculateModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center mx-auto">
+              <RefreshCw className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-extrabold text-slate-900 font-serif">
+                Xác Nhận Cập Nhật Đồng Loạt Mã Học Sinh
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Hệ thống sẽ tự động cập nhật lại mã định danh cho <strong>toàn bộ {users.filter(u => u.role === 'student').length} học sinh</strong> theo đúng quy tắc chuẩn:
+              </p>
+              <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-200 text-left text-xs space-y-1.5 text-indigo-950 font-medium">
+                <div className="font-bold text-indigo-900 border-b border-indigo-200/60 pb-1">
+                  📐 Công thức: <span className="font-mono bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-900">[Năm][MãLớp][SốThứTự]</span>
+                </div>
+                <div className="text-[11px] text-indigo-800 leading-relaxed">
+                  • <strong>Năm:</strong> 2026 (Năm học hiện tại)<br />
+                  • <strong>Mã Lớp:</strong> 9A1 → 91, 8A2 → 82, 7A3 → 73, 6A1 → 61<br />
+                  • <strong>Số Thứ Tự (STT):</strong> 01, 02, 03... (xếp theo bảng chữ cái theo lớp)
+                </div>
+                <div className="pt-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/60 p-2 rounded-lg border border-emerald-200/80">
+                  ✨ Ví dụ: Nguyễn Văn A • Lớp 9A1 • Số thứ tự 1 <br />
+                  ➡️ Mã học sinh: <strong className="font-mono text-emerald-950 text-xs">20269101</strong>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRecalculateModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleRecalculateAllStudentCodes}
+                className="px-5 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Xác Nhận Cập Nhật Tất Cả</span>
               </button>
             </div>
           </div>
