@@ -21,7 +21,8 @@ import {
   KeyRound
 } from 'lucide-react';
 import { User, UserRole } from '../../types';
-import { isTeacherToanOrAdmin } from '../../utils/authUtils';
+import { isTeacherToanOrAdmin, findUserForLogin } from '../../utils/authUtils';
+import { StorageService } from '../../services/storageService';
 
 interface LoginPageProps {
   currentUser: User;
@@ -53,47 +54,47 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setErrorMessage('');
     setSuccessMessage('');
 
-    const query = usernameInput.trim().toLowerCase();
+    const query = usernameInput.trim();
     const enteredPin = passwordInput.trim();
 
     if (!query) {
-      setErrorMessage('Vui lòng nhập Email hoặc Mã tài khoản!');
+      setErrorMessage('Vui lòng nhập Email, Mã định danh hoặc Họ tên tài khoản!');
       return;
     }
 
     if (!enteredPin) {
-      setErrorMessage('Vui lòng nhập Mật khẩu!');
+      setErrorMessage('Vui lòng nhập Mật khẩu / Mã PIN!');
       return;
     }
 
-    // Match by email, code, name, phone with safe optional checking & sanitized code check
-    const matched = users.find(u => {
-      const emailMatch = u.email ? u.email.trim().toLowerCase() === query : false;
-      const codeMatch = u.code ? u.code.trim().toLowerCase() === query : false;
-      const nameMatch = u.name ? u.name.trim().toLowerCase() === query : false;
-      const phoneMatch = u.phone ? u.phone.trim().toLowerCase() === query : false;
-      
-      const sanitizedCode = u.code ? u.code.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
-      const sanitizedQuery = query.replace(/[^a-zA-Z0-9]/g, '');
-      const sanitizedCodeMatch = Boolean(sanitizedCode && sanitizedQuery && sanitizedCode === sanitizedQuery);
+    // Always fetch latest users list from StorageService to catch newly created accounts immediately
+    const latestUsers = StorageService.getUsers();
+    const allUsersList = users && users.length > 0 ? users : latestUsers;
+    
+    // Combine storage users with props users to ensure no new user is missed
+    const combinedUsersMap = new Map<string, User>();
+    latestUsers.forEach(u => combinedUsersMap.set(u.id, u));
+    allUsersList.forEach(u => combinedUsersMap.set(u.id, u));
+    const allUsers = Array.from(combinedUsersMap.values());
 
-      return emailMatch || codeMatch || nameMatch || phoneMatch || sanitizedCodeMatch;
-    });
+    const matched = findUserForLogin(allUsers, query);
 
     if (!matched) {
-      setErrorMessage('Tài khoản không tồn tại trong hệ thống! Vui lòng kiểm tra lại Mã định danh hoặc Email.');
+      setErrorMessage('Mã định danh hoặc Email không chính xác! Vui lòng nhập đúng Mã học sinh (VD: HS-20269101 hoặc 20269101).');
       return;
     }
 
     if (matched.status === 'locked') {
-      setErrorMessage('Tài khoản này đang bị tạm khóa. Vui lòng liên hệ Quản trị viên!');
+      setErrorMessage('Tài khoản này đang bị tạm khóa. Vui lòng liên hệ Thầy Toàn / Quản trị viên!');
       return;
     }
 
-    // Check PIN: matches user.pin, or default 123456, or master PIN
+    // Check PIN strictly: matches user.pin (or default 123456) or master key admin123
     const validPin = matched.pin || '123456';
-    if (enteredPin !== validPin && enteredPin !== '123456' && enteredPin !== 'admin123') {
-      setErrorMessage('Mật khẩu không chính xác! Vui lòng kiểm tra lại.');
+    const isPinValid = (enteredPin === validPin || enteredPin === 'admin123');
+
+    if (!isPinValid) {
+      setErrorMessage('Mật khẩu không chính xác! Vui lòng kiểm tra lại mật khẩu của bạn.');
       return;
     }
 

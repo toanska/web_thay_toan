@@ -193,9 +193,14 @@ export function App() {
 
   // Handle switching users / roles
   const handleUserChange = (user: User) => {
-    setCurrentUser(user);
-    StorageService.setCurrentUser(user);
-    // Tự động chuyển đến trang chủ (Bài kiểm tra trực tuyến) sau khi đăng nhập tài khoản
+    if (!user || user.role === 'guest') {
+      StorageService.logoutUser();
+      setCurrentUser(StorageService.getCurrentUser());
+    } else {
+      const { user: loggedInUser } = StorageService.loginUser(user);
+      setCurrentUser(loggedInUser);
+    }
+    setAvailableUsers(StorageService.getUsers());
     setActiveTab('exams');
   };
 
