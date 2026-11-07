@@ -550,42 +550,30 @@ Bùi Thảo Nhi`
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto py-2">
-      {/* Banner Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              Đặc quyền Quản Trị Hệ Thống: Thầy Toàn & Admin
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Quản Trị, Tạo & Chỉnh Sửa Tài Khoản
-            </h2>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              Toàn quyền khởi tạo, cập nhật hồ sơ, phân quyền, cấp mã định danh và quản lý danh sách Giáo viên, Học sinh, Quản trị viên trên toàn hệ thống khảo thí Tin học.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button
-              onClick={() => handleOpenCreate('student')}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-900/40 transition-all hover:scale-105"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>+ Tạo Tài Khoản Mới</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowBatchModal(true);
-                handleParseBatchText();
-              }}
-              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-900/30 transition-all hover:scale-105"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>📥 Nhập Hàng Loạt (Excel/DS)</span>
-            </button>
-          </div>
+      {/* Action Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-2xs">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Quản Trị & Phân Quyền Tài Khoản</h2>
+          <p className="text-xs text-slate-500">Khởi tạo, cập nhật hồ sơ và cấp mã định danh Giáo viên & Học sinh</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            onClick={() => handleOpenCreate('student')}
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>+ Tạo Tài Khoản</span>
+          </button>
+          <button
+            onClick={() => {
+              setShowBatchModal(true);
+              handleParseBatchText();
+            }}
+            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>📥 Nhập Hàng Loạt</span>
+          </button>
         </div>
       </div>
 

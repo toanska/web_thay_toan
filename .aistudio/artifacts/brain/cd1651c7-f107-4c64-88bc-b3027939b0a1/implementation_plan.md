@@ -1,4 +1,4 @@
-# Kế Hoạch Rà Soát & Kiểm Tra Toàn Diện Hệ Thống Website THCS Nguyễn Du e-Testing
+# Kế Hoạch Rà Soát & Kiểm Tra Toàn Diện Hệ Thống Website THCS Ngô Quyền e-Testing
 
 ## 1. Mục Tiêu & Phạm Vi Rà Soát
 Rà soát toàn diện tất cả các phân hệ của website nhằm phát hiện và khắc phục triệt để các lỗi tiềm ẩn (logic phân quyền, giao diện, luồng làm bài thi, và xuất báo cáo).

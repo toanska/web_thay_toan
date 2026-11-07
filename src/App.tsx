@@ -41,7 +41,14 @@ export function App() {
   // State Initialization
   const [currentUser, setCurrentUser] = useState<User>(() => StorageService.getCurrentUser());
   const [availableUsers, setAvailableUsers] = useState<User[]>(INITIAL_USERS);
-  const [activeTab, setActiveTab] = useState<NavigationTab>('news');
+  const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab') as NavigationTab;
+      if (tabParam) return tabParam;
+    }
+    return 'exams';
+  });
 
   // Domain state
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -629,12 +636,14 @@ export function App() {
                 Chức năng phân tích phổ điểm và thống kê chất lượng khảo thí chỉ dành riêng cho <strong>Giáo viên</strong> và <strong>Quản trị viên</strong>.
               </p>
               <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
-                <button
-                  onClick={() => setIsLoginModalOpen(true)}
-                  className="px-4 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition-all shadow-md cursor-pointer"
-                >
-                  Đăng nhập tài khoản Giáo viên
-                </button>
+                {currentUser.role === 'guest' && (
+                  <button
+                    onClick={() => setIsLoginModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition-all shadow-md cursor-pointer"
+                  >
+                    Đăng nhập tài khoản Giáo viên
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveTab('exams')}
                   className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
@@ -665,12 +674,12 @@ export function App() {
           <div>
             <button
               type="button"
-              onClick={() => setActiveTab('news')}
+              onClick={() => setActiveTab('exams')}
               className="inline-flex items-center gap-2.5 font-bold text-slate-800 hover:text-blue-900 transition-colors cursor-pointer group"
-              title="Nhấn để về Trang chủ"
+              title="Nhấn để về Trang chủ bài kiểm tra"
             >
               <img
-                src="/assets/aistudio/logo_web_16edd9d6.png"
+                src="/assets/aistudio/LOGO_WEB_05e2bec9.jpg"
                 alt="Logo Thầy Toàn - PNT"
                 className="w-7 h-7 object-contain rounded-md bg-white border border-slate-200 shadow-2xs group-hover:scale-110 transition-transform"
               />
@@ -746,7 +755,7 @@ export function App() {
           exam={exams.find(e => e.id === viewingAttempt.examId)}
           currentUser={currentUser}
           onClose={() => setViewingAttempt(null)}
-          onRetake={() => {
+          onRetake={currentUser.role === 'student' ? undefined : () => {
             const targetExam = exams.find(e => e.id === viewingAttempt.examId);
             setViewingAttempt(null);
             if (targetExam) {

@@ -159,32 +159,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/30 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              Trung Tâm Báo Cáo & Thống Kê Khảo Thí
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Báo Cáo Phân Tích Kết Quả & Phổ Điểm Học Sinh
-            </h2>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              Trực quan hóa phổ điểm toàn trường, so sánh hiệu quả học tập giữa các lớp, phát hiện điểm mạnh - điểm yếu từng môn học và quản lý nhật ký làm bài của học sinh.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleExportCSV}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all active:scale-95"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Xuất báo cáo Excel (CSV)</span>
-            </button>
-          </div>
+      {/* Header bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-2xs">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Báo Cáo Phân Tích Kết Quả & Phổ Điểm</h2>
+          <p className="text-xs text-slate-500">Trực quan hóa phổ điểm toàn trường và quản lý nhật ký thi</p>
         </div>
+        <button
+          onClick={handleExportCSV}
+          className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer self-start sm:self-auto"
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>Xuất báo cáo Excel (CSV)</span>
+        </button>
       </div>
 
       {/* Summary KPI Cards */}

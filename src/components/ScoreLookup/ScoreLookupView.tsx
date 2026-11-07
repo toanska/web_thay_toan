@@ -187,31 +187,11 @@ export const ScoreLookupView: React.FC<ScoreLookupViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              Tra Cứu Khảo Thí & Bảng Điểm Điện Tử
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Tra Cứu Điểm Bài Kiểm Tra Học Sinh
-            </h2>
-            <p className="text-blue-100 text-sm leading-relaxed">
-              Nhập chính xác Mã định danh học sinh (ID) hoặc Họ và tên và Lớp để tra cứu lịch sử làm bài kiểm tra trực tuyến, điểm số, xếp loại và lời phê của giáo viên.
-            </p>
-          </div>
-
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-xs text-blue-100 space-y-2 max-w-sm shrink-0">
-            <div className="font-bold text-amber-300 flex items-center gap-1.5">
-              <GraduationCap className="w-4 h-4" />
-              Quy ước tra cứu điểm:
-            </div>
-            <p className="text-[11px] leading-tight">
-              Tìm theo Mã học sinh (VD: <span className="font-mono text-amber-200 font-bold">HS-20240901</span>), Họ và tên (VD: <span className="text-amber-200 font-bold">Trần Quốc Tuấn</span>), hoặc kết hợp Lớp học.
-            </p>
-          </div>
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Tra Cứu Điểm Bài Kiểm Tra Học Sinh</h2>
+          <p className="text-xs text-slate-500">Nhập mã định danh học sinh (ID) hoặc họ tên và lớp để xem điểm và lịch sử khảo thí</p>
         </div>
       </div>
 

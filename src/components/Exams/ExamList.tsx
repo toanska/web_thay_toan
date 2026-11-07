@@ -132,6 +132,13 @@ export const ExamList: React.FC<ExamListProps> = ({
   };
 
   const handleStartExamClick = (exam: Exam) => {
+    if (currentUser.role === 'student') {
+      const studentAttempts = getStudentAttemptsForExam(exam.id);
+      if (studentAttempts.length > 0) {
+        onViewAttempt(studentAttempts[studentAttempts.length - 1]);
+        return;
+      }
+    }
     if (exam.accessCode) {
       setActiveCodeExamId(exam.id);
     } else {
@@ -151,41 +158,22 @@ export const ExamList: React.FC<ExamListProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-indigo-950 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              Khảo Thí Trực Tuyến Chuẩn GDPT 2018
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Hệ Thống Phòng Thi & Đề Kiểm Tra Trực Tuyến
-            </h2>
-            <p className="text-blue-100 text-sm leading-relaxed">
-              Môi trường làm bài thi trắc nghiệm và tự luận chuẩn mực, tự động chấm điểm, phân tích lời giải chi tiết và tích hợp cảnh báo giám thị chống gian lận.
-            </p>
+      {/* Action Header for Teachers/Admins */}
+      {canManageExams && (
+        <div className="flex items-center justify-between bg-white px-5 py-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Phòng Thi & Quản Lý Đề Kiểm Tra</h2>
+            <p className="text-xs text-slate-500">Tổ chức đề thi trắc nghiệm và tự luận chuẩn GDPT 2018</p>
           </div>
-
-          {canManageExams ? (
-            <button
-              onClick={onCreateExam}
-              className="inline-flex items-center justify-center space-x-2 px-5 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold text-sm shadow-lg hover:shadow-xl transition-all shrink-0 active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tạo đề kiểm tra mới</span>
-            </button>
-          ) : onNavigateToLogin && (
-            <button
-              onClick={onNavigateToLogin}
-              className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 shadow-md transition-all shrink-0 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4 text-amber-300" />
-              <span>Đăng nhập Giáo viên để tạo đề</span>
-            </button>
-          )}
+          <button
+            onClick={onCreateExam}
+            className="inline-flex items-center justify-center space-x-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs hover:shadow-md transition-all shrink-0 active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tạo đề kiểm tra mới</span>
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Authentication Requirement Gate for Guests */}
       {currentUser.role === 'guest' ? (
@@ -612,24 +600,43 @@ export const ExamList: React.FC<ExamListProps> = ({
                       </div>
                     ) : (
                       <div className="flex items-center justify-between w-full">
-                        <span className="text-xs text-slate-500">
-                          {remainingAttempts > 0 
-                            ? `Còn ${remainingAttempts} lượt làm` 
-                            : 'Đã hết lượt làm'}
-                        </span>
+                        {currentUser.role === 'student' && hasCompleted ? (
+                          <div className="flex items-center justify-between w-full">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold text-xs border border-emerald-200">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              Đã nộp bài thi
+                            </span>
+                            {myAttempts.length > 0 && (
+                              <button
+                                onClick={() => onViewAttempt(myAttempts[0])}
+                                className="px-3.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs border border-blue-200 transition-colors cursor-pointer"
+                              >
+                                Xem kết quả
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-xs text-slate-500">
+                              {remainingAttempts > 0 
+                                ? `Còn ${remainingAttempts} lượt làm` 
+                                : 'Đã hết lượt làm'}
+                            </span>
 
-                        <button
-                          disabled={remainingAttempts <= 0}
-                          onClick={() => handleStartExamClick(exam)}
-                          className={`px-4 py-2 rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 ${
-                            remainingAttempts > 0
-                              ? 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'
-                              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                          }`}
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                          <span>{hasCompleted ? 'Làm lại bài thi' : 'Bắt đầu làm bài'}</span>
-                        </button>
+                            <button
+                              disabled={remainingAttempts <= 0}
+                              onClick={() => handleStartExamClick(exam)}
+                              className={`px-4 py-2 rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                                remainingAttempts > 0
+                                  ? 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'
+                                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                              }`}
+                            >
+                              <Play className="w-3.5 h-3.5" />
+                              <span>Bắt đầu làm bài</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

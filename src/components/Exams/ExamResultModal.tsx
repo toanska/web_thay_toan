@@ -71,8 +71,14 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white">
-      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in-95 print:max-h-none print:shadow-none print:rounded-none">
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in-95 print:max-h-none print:shadow-none print:rounded-none"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 print:hidden">
           <div className="flex items-center space-x-2">
@@ -94,7 +100,7 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
           {/* Printable Official School Header */}
           <div className="border-b-2 border-blue-900 pb-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
             <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">TRƯỜNG THCS NGUYỄN DU • HỆ THỐNG e-TESTING</p>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">TRƯỜNG THCS NGÔ QUYỀN • HỆ THỐNG e-TESTING</p>
               <h1 className="text-xl font-extrabold text-slate-900 font-serif mt-1">
                 {attempt.examTitle}
               </h1>
@@ -327,10 +333,10 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
           </button>
 
           <div className="flex items-center space-x-2">
-            {onRetake && (
+            {onRetake && currentUser?.role !== 'student' && (
               <button
                 onClick={onRetake}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Làm lại bài thi</span>

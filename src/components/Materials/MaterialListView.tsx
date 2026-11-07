@@ -212,68 +212,25 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       
-      {/* Top Banner & Quick Statistics */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-10 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-bold border border-teal-400/30">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Kho Học Liệu Mở Môn Tin Học THCS</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Kho Bài Giảng Điện Tử & Giáo Án (KHBD 5512)
-            </h1>
-            <p className="text-slate-300 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              Thư viện giáo án chuẩn Bộ GD&ĐT, Slide bài giảng PowerPoint tương tác, video hướng dẫn thực hành và tài liệu ôn tập Tin học Khối 6, 7, 8, 9.
-            </p>
+      {/* Action Header for Teachers/Admins */}
+      {canManage && (
+        <div className="flex items-center justify-between bg-white px-5 py-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Kho Bài Giảng Điện Tử & Giáo Án (GDPT 2018)</h2>
+            <p className="text-xs text-slate-500">Giáo án KHBD 5512, slide PowerPoint và tài liệu ôn tập Tin học</p>
           </div>
-
-          {/* Action Button: Upload */}
-          <div className="flex flex-wrap items-center gap-3">
-            {canManage ? (
-              <button
-                onClick={() => {
-                  setEditingMaterial(null);
-                  setIsUploadModalOpen(true);
-                }}
-                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-bold text-xs sm:text-sm shadow-lg hover:shadow-teal-500/25 transition-all flex items-center gap-2 cursor-pointer transform active:scale-95"
-              >
-                <Upload className="w-4 h-4" />
-                <span>+ Upload Bài Giảng / Giáo Án</span>
-              </button>
-            ) : (
-              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 text-xs text-slate-200">
-                <span>💡 Học sinh có thể đọc và tải toàn bộ học liệu miễn phí</span>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => {
+              setEditingMaterial(null);
+              setIsUploadModalOpen(true);
+            }}
+            className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Upload Bài Giảng / Giáo Án</span>
+          </button>
         </div>
-
-        {/* Quick Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-8 pt-6 border-t border-white/10">
-          <div className="bg-white/5 backdrop-blur-xs rounded-2xl p-3 sm:p-4 border border-white/10">
-            <p className="text-xs text-slate-300 font-medium">Tổng số tài liệu</p>
-            <p className="text-xl sm:text-2xl font-black text-white mt-1">{stats.total}</p>
-          </div>
-          <div className="bg-white/5 backdrop-blur-xs rounded-2xl p-3 sm:p-4 border border-white/10">
-            <p className="text-xs text-amber-300 font-medium">Bài giảng PowerPoint</p>
-            <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">{stats.slides}</p>
-          </div>
-          <div className="bg-white/5 backdrop-blur-xs rounded-2xl p-3 sm:p-4 border border-white/10">
-            <p className="text-xs text-blue-300 font-medium">Giáo án (KHBD 5512)</p>
-            <p className="text-xl sm:text-2xl font-black text-blue-400 mt-1">{stats.lessonPlans}</p>
-          </div>
-          <div className="bg-white/5 backdrop-blur-xs rounded-2xl p-3 sm:p-4 border border-white/10">
-            <p className="text-xs text-teal-300 font-medium">Tổng lượt tải & xem</p>
-            <p className="text-xl sm:text-2xl font-black text-teal-400 mt-1">
-              {(stats.totalDownloads + stats.totalViews).toLocaleString('vi-VN')}
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Filter Toolbar */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-4">

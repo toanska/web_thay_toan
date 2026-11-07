@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   GraduationCap, 
   Newspaper, 
@@ -74,6 +74,32 @@ export const Header: React.FC<HeaderProps> = ({
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const notifMenuRef = useRef<HTMLDivElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
+        setShowUserMenu(false);
+      }
+      if (notifMenuRef.current && !notifMenuRef.current.contains(target)) {
+        setShowNotifMenu(false);
+      }
+      if (settingsMenuRef.current && !settingsMenuRef.current.contains(target)) {
+        setShowSettingsMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
   const [syncState, setSyncState] = useState<{
     status: 'idle' | 'syncing' | 'connected' | 'error';
     isSyncing: boolean;
@@ -138,9 +164,9 @@ export const Header: React.FC<HeaderProps> = ({
   const isAuthorizedToManageStudents = isTeacherToanOrAdmin(currentUser);
 
   const allNavItems: { id: NavigationTab; label: string; icon: any; color: string; badge?: string }[] = [
+    { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
     { id: 'news', label: 'Tin tức & Thông báo', icon: Newspaper, color: 'text-sky-600' },
     { id: 'materials', label: 'Bài giảng & Giáo án', icon: BookOpen, color: 'text-teal-600', badge: 'Mới' },
-    { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
     { id: 'score_lookup', label: 'Tra cứu điểm (ID Học sinh)', icon: Search, color: 'text-amber-600' },
     { id: 'admin_portal', label: 'Trang Quản Trị Tổng Hợp', icon: ShieldCheck, color: 'text-rose-600', badge: 'VIP' },
     { id: 'reports', label: 'Báo cáo & Phổ điểm', icon: BarChart3, color: 'text-purple-600' },
@@ -178,9 +204,9 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center space-x-2 sm:space-x-3">
             <button
               type="button"
-              onClick={() => setActiveTab('news')}
+              onClick={() => setActiveTab('exams')}
               className="flex items-center space-x-2.5 sm:space-x-3 text-left group cursor-pointer focus:outline-hidden transition-all duration-150 active:scale-98"
-              title="Nhấn để quay về Trang chủ (Tin tức & Thông báo)"
+              title="Nhấn để quay về Danh sách Bài kiểm tra trực tuyến"
             >
               <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white shadow-md flex items-center justify-center p-0.5 border border-white/40 ring-1 ring-blue-900/10 group-hover:scale-105 group-hover:ring-2 group-hover:ring-amber-300/80 transition-all duration-200 overflow-hidden shrink-0">
                 <img
@@ -224,7 +250,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="flex items-center space-x-2 sm:space-x-4 text-xs">
             {/* Quick Role Switcher */}
-            <div className="relative">
+            <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => { setShowUserMenu(!showUserMenu); setShowNotifMenu(false); setShowSettingsMenu(false); }}
                 className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all cursor-pointer text-left"
@@ -363,10 +389,10 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Notification Bell */}
-            <div className="relative">
+            <div className="relative" ref={notifMenuRef}>
               <button
                 onClick={() => { setShowNotifMenu(!showNotifMenu); setShowUserMenu(false); setShowSettingsMenu(false); }}
-                className="relative p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white"
+                className="relative p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white cursor-pointer"
                 title="Thông báo hệ thống"
               >
                 <Bell className="w-4 h-4" />
@@ -446,7 +472,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Quick Data Backup / Reset Dropdown - ONLY for Teacher Toan or Admin */}
             {isAuthorizedToManageStudents && (
-              <div className="relative">
+              <div className="relative" ref={settingsMenuRef}>
                 <button
                   onClick={() => { setShowSettingsMenu(!showSettingsMenu); setShowUserMenu(false); setShowNotifMenu(false); }}
                   className="p-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 transition-all text-white cursor-pointer"
@@ -658,8 +684,14 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* MODAL: Quản lý & Thay đổi Logo Website */}
       {showLogoModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 text-slate-800">
+        <div 
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setShowLogoModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 text-slate-800 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2.5">
                 <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
@@ -785,8 +817,14 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* MODAL: Xác nhận khôi phục dữ liệu mẫu gốc (Thay thế an toàn cho window.confirm) */}
       {showResetConfirmModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 text-slate-800">
+        <div 
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setShowResetConfirmModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 text-slate-800 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
               <RotateCcw className="w-6 h-6" />
             </div>

@@ -360,42 +360,30 @@ Bùi Thảo Nhi`
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto py-2">
-      {/* Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-semibold">
-              <GraduationCap className="w-3.5 h-3.5 text-amber-300" />
-              Phân Hệ Quản Trị & Khảo Thí Môn Tin Học
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-serif">
-              Quản Lý & Tạo Tài Khoản Học Sinh
-            </h2>
-            <p className="text-blue-100 text-sm leading-relaxed">
-              Khởi tạo mã định danh học sinh (ID), cấp tài khoản đăng nhập phòng thi, quản lý thông tin lớp học và theo dõi kết quả khảo thí trực tuyến.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button
-              onClick={handleOpenCreateSingle}
-              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-900/40 transition-all hover:scale-105"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>+ Thêm 1 Học Sinh Mới</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowBatchModal(true);
-                handleParseBatchText();
-              }}
-              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-900/30 transition-all hover:scale-105"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>📥 Tạo Nhanh Hàng Loạt (Excel/DS Lớp)</span>
-            </button>
-          </div>
+      {/* Action Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-2xs">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Quản Lý & Cấp Tài Khoản Học Sinh</h2>
+          <p className="text-xs text-slate-500">Khởi tạo mã định danh (ID), cấp tài khoản phòng thi và quản lý danh sách học sinh</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            onClick={handleOpenCreateSingle}
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>+ Thêm 1 Học Sinh</span>
+          </button>
+          <button
+            onClick={() => {
+              setShowBatchModal(true);
+              handleParseBatchText();
+            }}
+            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>📥 Tạo Nhanh Hàng Loạt</span>
+          </button>
         </div>
       </div>
 
