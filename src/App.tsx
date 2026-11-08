@@ -175,17 +175,44 @@ export function App() {
     };
   }, []);
 
+  // 3. Auto-redirect if user is already admin but on login page
+  useEffect(() => {
+    if (activeTab === 'login' && (currentUser.role === 'admin' || currentUser.role === 'teacher')) {
+      setActiveTab('admin_portal');
+    }
+  }, [activeTab, currentUser.role]);
+
   // Handle switching users / roles
   const handleUserChange = async (user: User) => {
     if (!user || user.role === 'guest') {
       StorageService.logoutUser();
       setCurrentUser(StorageService.getCurrentUser());
+      setActiveTab('exams');
     } else {
-      const loggedInUser = await StorageService.loginUser(user);
-      setCurrentUser(loggedInUser);
+      // 1. Prepare the user object
+      const updatedUser: User = {
+        ...user,
+        lastLoginAt: new Date().toISOString()
+      };
+
+      // 2. Persist to local storage immediately so it survives a reload
+      StorageService.setCurrentUser(updatedUser);
+      
+      // 3. Update React state for immediate UI feedback
+      setCurrentUser(updatedUser);
+      
+      // 4. Navigate based on role
+      if (updatedUser.role === 'admin' || updatedUser.role === 'teacher') {
+        setActiveTab('admin_portal');
+      } else {
+        setActiveTab('exams');
+      }
+
+      // 5. Sync with Firestore in background (non-blocking)
+      StorageService.loginUser(user).catch(err => {
+        console.warn('Background Firestore login failed:', err);
+      });
     }
-    // reloadAllData will be triggered by listener
-    setActiveTab('exams');
   };
 
   const handleLogout = () => {

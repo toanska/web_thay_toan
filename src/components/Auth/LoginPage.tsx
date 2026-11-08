@@ -91,13 +91,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name}. Đang tự động chuyển về trang chủ...`);
-    setTimeout(() => {
-      onLoginUser(matched);
-      onNavigateToTab('exams');
-      setUsernameInput('');
-      setPasswordInput('');
-    }, 400);
+    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name}. Đang chuyển giao diện...`);
+    onLoginUser(matched);
+    setUsernameInput('');
+    setPasswordInput('');
   };
 
   return (
