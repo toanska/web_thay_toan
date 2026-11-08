@@ -304,6 +304,15 @@ export const CloudflareService = {
         throw new Error(`Lỗi từ Cloudflare (${res.status}): ${res.statusText}`);
       }
 
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('text/html')) {
+        return {
+          success: false,
+          message: 'Cloudflare Worker URL đang trả về trang HTML thay vì JSON API. Vui lòng kiểm tra lại URL Worker.',
+          updated: false,
+        };
+      }
+
       const remoteData = await res.json();
 
       if (remoteData.empty) {

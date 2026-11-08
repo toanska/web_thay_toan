@@ -466,16 +466,19 @@ export const StorageService = {
       let hasChanges = false;
       let newAttemptsCount = 0;
 
-      // 1. Merge Attempts (Non-destructive: union by ID)
-      if (Array.isArray(remoteData.attempts) && remoteData.attempts.length > 0) {
+      const isDifferent = (a: any, b: any) => JSON.stringify(a) !== JSON.stringify(b);
+
+      // 1. Merge Attempts (Union by ID & update if changed)
+      if (Array.isArray(remoteData.attempts)) {
         const localAttempts = this.getAttempts();
         const localMap = new Map<string, ExamAttempt>(localAttempts.map(a => [a.id, a]));
         
         remoteData.attempts.forEach((remAtt: ExamAttempt) => {
-          if (!localMap.has(remAtt.id)) {
+          const existing = localMap.get(remAtt.id);
+          if (!existing || isDifferent(existing, remAtt)) {
+            if (!existing) newAttemptsCount++;
             localMap.set(remAtt.id, remAtt);
             hasChanges = true;
-            newAttemptsCount++;
           }
         });
 
@@ -486,19 +489,17 @@ export const StorageService = {
         }
       }
 
-      // 2. Sync Exams (Add new & remove deleted on remote)
+      // 2. Sync Exams (Add new, update modified, & remove deleted on remote)
       if (Array.isArray(remoteData.exams)) {
         const localExams = this.getExams();
         const remoteExamIds = new Set(remoteData.exams.map((e: Exam) => e.id));
-        
-        // Check if any local exam was deleted on cloud
         const filteredExams = localExams.filter(e => remoteExamIds.has(e.id));
-        
         const localMap = new Map<string, Exam>(filteredExams.map(e => [e.id, e]));
         let examsChanged = localExams.length !== filteredExams.length;
 
         remoteData.exams.forEach((remEx: Exam) => {
-          if (!localMap.has(remEx.id)) {
+          const existing = localMap.get(remEx.id);
+          if (!existing || isDifferent(existing, remEx)) {
             localMap.set(remEx.id, remEx);
             examsChanged = true;
           }
@@ -510,17 +511,17 @@ export const StorageService = {
         }
       }
 
-      // 3. Sync Questions (Add new & remove deleted on remote)
+      // 3. Sync Questions (Add new, update modified, & remove deleted on remote)
       if (Array.isArray(remoteData.questions)) {
         const localQuestions = this.getQuestions();
         const remoteQIds = new Set(remoteData.questions.map((q: Question) => q.id));
-        
         const filteredQuestions = localQuestions.filter(q => remoteQIds.has(q.id));
         const localMap = new Map<string, Question>(filteredQuestions.map(q => [q.id, q]));
         let qChanged = localQuestions.length !== filteredQuestions.length;
 
         remoteData.questions.forEach((remQ: Question) => {
-          if (!localMap.has(remQ.id)) {
+          const existing = localMap.get(remQ.id);
+          if (!existing || isDifferent(existing, remQ)) {
             localMap.set(remQ.id, remQ);
             qChanged = true;
           }
@@ -532,17 +533,17 @@ export const StorageService = {
         }
       }
 
-      // 4. Sync News (Add new & remove deleted on remote)
+      // 4. Sync News (Add new, update modified, & remove deleted on remote)
       if (Array.isArray(remoteData.news)) {
         const localNews = this.getNews();
         const remoteNewsIds = new Set(remoteData.news.map((n: NewsArticle) => n.id));
-        
         const filteredNews = localNews.filter(n => remoteNewsIds.has(n.id));
         const localMap = new Map<string, NewsArticle>(filteredNews.map(n => [n.id, n]));
         let newsChanged = localNews.length !== filteredNews.length;
 
         remoteData.news.forEach((remN: NewsArticle) => {
-          if (!localMap.has(remN.id)) {
+          const existing = localMap.get(remN.id);
+          if (!existing || isDifferent(existing, remN)) {
             localMap.set(remN.id, remN);
             newsChanged = true;
           }
@@ -556,25 +557,19 @@ export const StorageService = {
         }
       }
 
-      // 5. Sync Users (Add new & remove deleted on remote)
+      // 5. Sync Users (Add new, update modified, & remove deleted on remote)
       if (Array.isArray(remoteData.users)) {
         const localUsers = this.getUsers();
         const remoteUserIds = new Set(remoteData.users.map((u: User) => u.id));
-        
         const filteredUsers = localUsers.filter(u => remoteUserIds.has(u.id));
         const localMap = new Map<string, User>(filteredUsers.map(u => [u.id, u]));
         let usersChanged = localUsers.length !== filteredUsers.length;
 
         remoteData.users.forEach((remU: User) => {
-          if (!localMap.has(remU.id)) {
+          const existing = localMap.get(remU.id);
+          if (!existing || isDifferent(existing, remU)) {
             localMap.set(remU.id, remU);
             usersChanged = true;
-          } else {
-            const localU = localMap.get(remU.id)!;
-            if (remU.pin && remU.pin !== localU.pin) {
-              localMap.set(remU.id, { ...localU, pin: remU.pin });
-              usersChanged = true;
-            }
           }
         });
 
@@ -584,17 +579,17 @@ export const StorageService = {
         }
       }
 
-      // 6. Sync Materials (Add new & remove deleted on remote)
+      // 6. Sync Materials (Add new, update modified, & remove deleted on remote)
       if (Array.isArray(remoteData.materials)) {
         const localMat = this.getMaterials();
         const remoteMatIds = new Set(remoteData.materials.map((m: LessonMaterial) => m.id));
-        
         const filteredMat = localMat.filter(m => remoteMatIds.has(m.id));
         const localMap = new Map<string, LessonMaterial>(filteredMat.map(m => [m.id, m]));
         let matChanged = localMat.length !== filteredMat.length;
 
         remoteData.materials.forEach((remM: LessonMaterial) => {
-          if (!localMap.has(remM.id)) {
+          const existing = localMap.get(remM.id);
+          if (!existing || isDifferent(existing, remM)) {
             localMap.set(remM.id, remM);
             matChanged = true;
           }
