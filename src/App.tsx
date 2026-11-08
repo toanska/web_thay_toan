@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { NewsList } from './components/News/NewsList';
 import { NewsDetailModal } from './components/News/NewsDetailModal';
@@ -82,6 +82,7 @@ export function App() {
     newDevice: string;
   } | null>(null);
   const [syncToast, setSyncToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [dbConnected, setDbConnected] = useState(false);
 
   const reloadAllData = async () => {
     try {
@@ -124,9 +125,8 @@ export function App() {
   };
 
   // Load initial data and run automatic real-time background sync loop
+  const unsubRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-
     const initAndLoad = async () => {
       await StorageService.initialize({
         users: INITIAL_USERS,
@@ -145,16 +145,18 @@ export function App() {
         }
       }
 
+      // Initial fetch to populate state before listeners kick in
       await reloadAllData();
 
-      // 1. Subscribe to Real-time Firestore Updates (Automatic Sync across devices)
-      unsubscribe = StorageService.subscribeToAll(() => {
-        reloadAllData();
-        setSyncToast({
-          message: 'Dữ liệu đã được cập nhật tự động!',
-          type: 'success'
-        });
-        setTimeout(() => setSyncToast(null), 3000);
+      // 1. Subscribe to Real-time Firestore Updates (Immediate Automatic Sync)
+      unsubRef.current = StorageService.subscribeToCollections({
+        onUsers: (data) => data.length > 0 ? setAvailableUsers(data) : setAvailableUsers(INITIAL_USERS),
+        onExams: (data) => data.length > 0 ? setExams(data) : setExams(INITIAL_EXAMS),
+        onNews: (data) => data.length > 0 ? setNews(data) : setNews(INITIAL_NEWS),
+        onMaterials: (data) => data.length > 0 ? setMaterials(data) : setMaterials(INITIAL_MATERIALS),
+        onAttempts: (data) => setAttempts(data),
+        onQuestions: (data) => data.length > 0 ? setQuestions(data) : setQuestions(INITIAL_QUESTIONS),
+        onNotifications: (data) => setNotifications(data as any),
       });
     };
 
@@ -170,48 +172,57 @@ export function App() {
     window.addEventListener('storage', handleStorageEvent);
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubRef.current) unsubRef.current();
       window.removeEventListener('storage', handleStorageEvent);
     };
   }, []);
 
-  // 3. Auto-redirect if user is already admin but on login page
+  // 3. Auto-redirect based on user role changes
   useEffect(() => {
-    if (activeTab === 'login' && (currentUser.role === 'admin' || currentUser.role === 'teacher')) {
+    // If user is admin/teacher and NOT currently on a restricted tab, move them to admin portal
+    // This handles both fresh login and returning to the site as admin
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'teacher';
+    if (isAdmin && (activeTab === 'login' || activeTab === 'exams')) {
       setActiveTab('admin_portal');
+    } else if (currentUser.role === 'guest' && (activeTab === 'admin_portal' || activeTab === 'students' || activeTab === 'reports')) {
+      // If guest accidentally hits admin tab, send to exams
+      setActiveTab('exams');
     }
-  }, [activeTab, currentUser.role]);
+  }, [currentUser.id, currentUser.role, activeTab]);
+
+  // 4. Connection Status Monitor
+  useEffect(() => {
+    const checkConn = async () => {
+      const { onAuthStateChanged } = await import('firebase/auth');
+      onAuthStateChanged(StorageService.auth, (user) => {
+        setDbConnected(!!user);
+      });
+    };
+    checkConn();
+  }, []);
 
   // Handle switching users / roles
   const handleUserChange = async (user: User) => {
     if (!user || user.role === 'guest') {
       StorageService.logoutUser();
       setCurrentUser(StorageService.getCurrentUser());
-      setActiveTab('exams');
+      // Redirection useEffect will handle the tab switch
     } else {
-      // 1. Prepare the user object
       const updatedUser: User = {
         ...user,
         lastLoginAt: new Date().toISOString()
       };
 
-      // 2. Persist to local storage immediately so it survives a reload
+      // Persist locally
       StorageService.setCurrentUser(updatedUser);
-      
-      // 3. Update React state for immediate UI feedback
       setCurrentUser(updatedUser);
       
-      // 4. Navigate based on role
-      if (updatedUser.role === 'admin' || updatedUser.role === 'teacher') {
-        setActiveTab('admin_portal');
-      } else {
-        setActiveTab('exams');
-      }
-
-      // 5. Sync with Firestore in background (non-blocking)
-      StorageService.loginUser(user).catch(err => {
+      // Sync with Firestore (Background)
+      try {
+        await StorageService.loginUser(user);
+      } catch (err) {
         console.warn('Background Firestore login failed:', err);
-      });
+      }
     }
   };
 
@@ -499,6 +510,7 @@ export function App() {
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenChangePasswordModal={() => setIsChangePasswordModalOpen(true)}
         onLogout={handleLogout}
+        dbConnected={dbConnected}
       />
 
       {/* Main App Container */}

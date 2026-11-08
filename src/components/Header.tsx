@@ -51,6 +51,7 @@ interface HeaderProps {
   onOpenLoginModal?: () => void;
   onOpenChangePasswordModal?: () => void;
   onLogout?: () => void;
+  dbConnected?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -67,7 +68,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCloudflareSync,
   onOpenLoginModal,
   onOpenChangePasswordModal,
-  onLogout
+  onLogout,
+  dbConnected
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
@@ -409,6 +411,18 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
+            {/* Real-time Connection Status (Visible for Admins) */}
+            {isAuthorizedToManageStudents && (
+              <div className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                dbConnected 
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                  : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+              }`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${dbConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                <span>{dbConnected ? 'Cloud Connected' : 'Disconnected'}</span>
+              </div>
+            )}
+
             {/* Notification Bell */}
             <div className="relative" ref={notifMenuRef}>
               <button
@@ -455,41 +469,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Realtime Auto-Sync Cloud Status button - ONLY for Teacher Toan or Admin */}
-            {isAuthorizedToManageStudents && onOpenCloudflareSync && (
-              <button
-                onClick={onOpenCloudflareSync}
-                className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer shadow-2xs ${
-                  syncState.isSyncing
-                    ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/50 text-amber-200'
-                    : syncState.hasWorker && syncState.autoSync
-                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/50 text-emerald-200'
-                    : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-400/40 text-orange-200'
-                }`}
-                title="Hệ thống tự động đồng bộ thời gian thực với cơ sở dữ liệu (Dành riêng cho Thầy Toàn / Admin)"
-              >
-                {syncState.isSyncing ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 text-amber-300 animate-spin" />
-                    <span className="hidden sm:inline font-semibold text-xs text-amber-100">Đang đồng bộ...</span>
-                  </>
-                ) : syncState.hasWorker && syncState.autoSync ? (
-                  <>
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <CloudLightning className="w-3.5 h-3.5 text-emerald-300" />
-                    <span className="hidden sm:inline font-semibold text-xs text-emerald-100">Tự động đồng bộ</span>
-                  </>
-                ) : (
-                  <>
-                    <CloudLightning className="w-3.5 h-3.5 text-orange-400" />
-                    <span className="hidden sm:inline font-semibold text-xs text-orange-100">Đồng bộ Cloud</span>
-                  </>
-                )}
-              </button>
-            )}
+            {/* Automatic Real-time Sync Status indicator can be added here if needed, but the user requested 'automatic' without extra buttons */}
 
             {/* Quick Data Backup / Reset Dropdown - ONLY for Teacher Toan or Admin */}
             {isAuthorizedToManageStudents && (
@@ -521,15 +501,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>Cập nhật Logo Website</span>
                       </button>
 
-                      {onOpenCloudflareSync && (
-                        <button
-                          onClick={() => { onOpenCloudflareSync(); setShowSettingsMenu(false); }}
-                          className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-orange-50 flex items-center space-x-2 text-orange-800 font-medium cursor-pointer"
-                        >
-                          <CloudLightning className="w-4 h-4 text-orange-600" />
-                          <span>Đồng bộ Cloudflare KV (Cloud)</span>
-                        </button>
-                      )}
+                      {/* Cloudflare sync removed - now automatic via Firebase */}
 
                       <button
                         onClick={() => { onExportData(); setShowSettingsMenu(false); }}

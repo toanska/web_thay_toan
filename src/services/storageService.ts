@@ -61,6 +61,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 let currentUserCache: User | null = null;
 
 export const StorageService = {
+  auth,
   // --- Users ---
   async getUsers(): Promise<User[]> {
     try {
@@ -363,12 +364,36 @@ export const StorageService = {
   },
 
   // --- Listeners for Real-time Sync ---
-  subscribeToAll(onUpdate: () => void) {
-    const unsubUsers = onSnapshot(collection(db, 'users'), onUpdate);
-    const unsubExams = onSnapshot(collection(db, 'exams'), onUpdate);
-    const unsubNews = onSnapshot(collection(db, 'news'), onUpdate);
-    const unsubMaterials = onSnapshot(collection(db, 'materials'), onUpdate);
-    const unsubAttempts = onSnapshot(collection(db, 'attempts'), onUpdate);
+  subscribeToCollections(callbacks: {
+    onUsers?: (data: User[]) => void;
+    onExams?: (data: Exam[]) => void;
+    onNews?: (data: NewsArticle[]) => void;
+    onMaterials?: (data: LessonMaterial[]) => void;
+    onAttempts?: (data: ExamAttempt[]) => void;
+    onQuestions?: (data: Question[]) => void;
+    onNotifications?: (data: NotificationItem[]) => void;
+  }) {
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      callbacks.onUsers?.(snap.docs.map(d => d.data() as User));
+    });
+    const unsubExams = onSnapshot(collection(db, 'exams'), (snap) => {
+      callbacks.onExams?.(snap.docs.map(d => d.data() as Exam));
+    });
+    const unsubNews = onSnapshot(query(collection(db, 'news'), orderBy('publishedAt', 'desc')), (snap) => {
+      callbacks.onNews?.(snap.docs.map(d => d.data() as NewsArticle));
+    });
+    const unsubMaterials = onSnapshot(collection(db, 'materials'), (snap) => {
+      callbacks.onMaterials?.(snap.docs.map(d => d.data() as LessonMaterial));
+    });
+    const unsubAttempts = onSnapshot(query(collection(db, 'attempts'), orderBy('submittedAt', 'desc')), (snap) => {
+      callbacks.onAttempts?.(snap.docs.map(d => d.data() as ExamAttempt));
+    });
+    const unsubQuestions = onSnapshot(collection(db, 'questions'), (snap) => {
+      callbacks.onQuestions?.(snap.docs.map(d => d.data() as Question));
+    });
+    const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('timestamp', 'desc')), (snap) => {
+      callbacks.onNotifications?.(snap.docs.map(d => d.data() as NotificationItem));
+    });
 
     return () => {
       unsubUsers();
@@ -376,7 +401,15 @@ export const StorageService = {
       unsubNews();
       unsubMaterials();
       unsubAttempts();
+      unsubQuestions();
+      unsubNotifs();
     };
+  },
+
+  // Legacy stub for App.tsx compatibility during transition
+  subscribeToAll(onUpdate: () => void) {
+    const unsub = onSnapshot(collection(db, 'users'), onUpdate);
+    return unsub;
   },
 
   // Mock methods to satisfy previous interfaces if needed

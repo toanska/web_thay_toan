@@ -380,7 +380,6 @@ export const ExamList: React.FC<ExamListProps> = ({
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
           <span>Danh sách đề thi ({filteredExams.length})</span>
-          <span>Học kỳ II</span>
         </div>
 
         {filteredExams.length === 0 ? (
