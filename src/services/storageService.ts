@@ -72,7 +72,7 @@ function setItem<T>(key: string, value: T, broadcast = true): void {
 export const StorageService = {
   // Users
   getUsers(): User[] {
-    return getItem<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    return getItem<User[]>(STORAGE_KEYS.USERS, []);
   },
   
   getCurrentUser(): User {
@@ -235,7 +235,7 @@ export const StorageService = {
 
   // Questions
   getQuestions(): Question[] {
-    const raw = getItem<Question[]>(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
+    const raw = getItem<Question[]>(STORAGE_KEYS.QUESTIONS, []);
     return raw.map(q => ({ ...q, subject: 'Tin học' as const }));
   },
 
@@ -260,7 +260,7 @@ export const StorageService = {
 
   // Exams
   getExams(): Exam[] {
-    const raw = getItem<Exam[]>(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
+    const raw = getItem<Exam[]>(STORAGE_KEYS.EXAMS, []);
     return raw.map(e => ({
       ...e,
       subject: 'Tin học' as const,
@@ -294,7 +294,7 @@ export const StorageService = {
 
   // Exam Attempts
   getAttempts(): ExamAttempt[] {
-    const raw = getItem<ExamAttempt[]>(STORAGE_KEYS.ATTEMPTS, INITIAL_ATTEMPTS);
+    const raw = getItem<ExamAttempt[]>(STORAGE_KEYS.ATTEMPTS, []);
     return raw.map(a => ({ ...a, subject: 'Tin học' as const }));
   },
 
@@ -329,8 +329,7 @@ export const StorageService = {
 
   // News
   getNews(): NewsArticle[] {
-    const raw = getItem<NewsArticle[]>(STORAGE_KEYS.NEWS, INITIAL_NEWS);
-    // Sanitize any legacy categories
+    const raw = getItem<NewsArticle[]>(STORAGE_KEYS.NEWS, []);
     return raw.map(item => {
       if (item.category !== 'Thông báo chung' && item.category !== 'Góc học tập') {
         return { ...item, category: 'Thông báo chung' as const };
@@ -386,7 +385,7 @@ export const StorageService = {
 
   // Notifications
   getNotifications(): NotificationItem[] {
-    return getItem<NotificationItem[]>(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    return getItem<NotificationItem[]>(STORAGE_KEYS.NOTIFICATIONS, []);
   },
 
   markNotificationRead(id: string): void {
@@ -396,7 +395,7 @@ export const StorageService = {
 
   // Materials (Bài giảng & Giáo án)
   getMaterials(): LessonMaterial[] {
-    return getItem<LessonMaterial[]>(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
+    return getItem<LessonMaterial[]>(STORAGE_KEYS.MATERIALS, []);
   },
 
   saveMaterial(mat: LessonMaterial): LessonMaterial {

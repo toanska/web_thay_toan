@@ -334,22 +334,14 @@ export const CloudflareService = {
     }
   },
 
-  // Debounced auto-push when local state changes
-  _pushTimeout: null as any,
+  // Immediate auto-push when local state changes
   triggerAutoSync(): void {
     const config = this.getConfig();
     if (!config.enabled || !config.autoSync || !config.workerUrl) {
       return;
     }
 
-    if (this._pushTimeout) {
-      clearTimeout(this._pushTimeout);
-    }
-
-    // Debounce 800ms to batch rapid mutations
-    this._pushTimeout = setTimeout(() => {
-      this.pushDataToCloud(config).catch(err => console.warn('Auto-push warning:', err));
-    }, 800);
+    this.pushDataToCloud(config).catch(err => console.warn('Auto-push warning:', err));
   },
 
   // Setup background auto-sync polling loop and lifecycle listeners
