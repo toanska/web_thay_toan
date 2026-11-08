@@ -103,13 +103,21 @@ export function App() {
         StorageService.getUsers()
       ]);
 
-      setNews(newsData);
-      setMaterials(materialsData);
-      setExams(examsData);
-      setQuestions(questionsData);
+      // Only update if we actually got data or if Firestore is explicitly empty but working
+      // If Firestore fails (returns []), we should keep the existing data or mock data
+      if (newsData.length > 0) setNews(newsData);
+      if (materialsData.length > 0) setMaterials(materialsData);
+      if (examsData.length > 0) setExams(examsData);
+      if (questionsData.length > 0) setQuestions(questionsData);
+      
       setAttempts(attemptsData);
       setNotifications(notificationsData);
-      setAvailableUsers(usersData);
+      
+      if (usersData.length > 0) {
+        setAvailableUsers(usersData);
+      } else {
+        setAvailableUsers(INITIAL_USERS);
+      }
     } catch (err) {
       console.error('Failed to reload data:', err);
     }
@@ -127,6 +135,16 @@ export function App() {
         news: INITIAL_NEWS,
         materials: INITIAL_MATERIALS
       });
+      
+      // Auto-detect developer and login as admin if authenticated via Google
+      const { auth } = await import('./firebase');
+      if (auth.currentUser && (auth.currentUser.email === 'toanska@gmail.com' || auth.currentUser.email === 'admin.tinhoc@thcs.edu.vn')) {
+        const adminUser = INITIAL_USERS.find(u => u.code === 'ADMIN-TINHOC');
+        if (adminUser) {
+          handleUserChange(adminUser);
+        }
+      }
+
       await reloadAllData();
 
       // 1. Subscribe to Real-time Firestore Updates (Automatic Sync across devices)

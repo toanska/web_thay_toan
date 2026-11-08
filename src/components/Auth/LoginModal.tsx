@@ -213,7 +213,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               </label>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-3">
               <button
                 type="submit"
                 className="w-full py-3 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -221,6 +221,33 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <LogIn className="w-4 h-4" />
                 <span>Xác Nhận Đăng Nhập</span>
               </button>
+
+              {/* Developer / Admin Seeding Fallback */}
+              {(users.length <= 1 || (currentUser.role === 'admin' || currentUser.role === 'teacher')) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { INITIAL_USERS, INITIAL_QUESTIONS, INITIAL_EXAMS, INITIAL_NEWS, INITIAL_MATERIALS } = await import('../../data/mockData');
+                    try {
+                      alert('Đang khởi tạo dữ liệu lên Đám mây Firebase... Vui lòng đợi.');
+                      await StorageService.initialize({
+                        users: INITIAL_USERS,
+                        questions: INITIAL_QUESTIONS,
+                        exams: INITIAL_EXAMS,
+                        news: INITIAL_NEWS,
+                        materials: INITIAL_MATERIALS
+                      });
+                      alert('Khởi tạo thành công! Dữ liệu đã được đồng bộ.');
+                      window.location.reload();
+                    } catch (err) {
+                      alert('Lỗi khởi tạo: ' + (err instanceof Error ? err.message : String(err)));
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Khởi tạo dữ liệu hệ thống (Dành cho Admin)
+                </button>
+              )}
             </div>
           </form>
         </div>
