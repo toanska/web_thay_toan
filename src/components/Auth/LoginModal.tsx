@@ -55,15 +55,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Always fetch latest users list from StorageService to catch newly created accounts immediately
-    const latestUsers = StorageService.getUsers();
-    const allUsersList = users && users.length > 0 ? users : latestUsers;
-    
-    // Combine storage users with props users to ensure no new user is missed
-    const combinedUsersMap = new Map<string, User>();
-    latestUsers.forEach(u => combinedUsersMap.set(u.id, u));
-    allUsersList.forEach(u => combinedUsersMap.set(u.id, u));
-    const allUsers = Array.from(combinedUsersMap.values());
+    // Use the users prop which is kept fresh by App.tsx's real-time listener
+    const allUsers = users || [];
 
     const matched = findUserForLogin(allUsers, query);
 

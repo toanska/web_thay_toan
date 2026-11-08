@@ -1,735 +1,403 @@
-import { Exam, ExamAttempt, NewsArticle, NotificationItem, Question, User, Subject, GradeLevel, DifficultyLevel, LessonMaterial } from '../types';
-import { INITIAL_USERS, INITIAL_QUESTIONS, INITIAL_EXAMS, INITIAL_ATTEMPTS, INITIAL_NEWS, INITIAL_NOTIFICATIONS, INITIAL_MATERIALS, GUEST_USER } from '../data/mockData';
+import { 
+  Exam, 
+  ExamAttempt, 
+  NewsArticle, 
+  NotificationItem, 
+  Question, 
+  User, 
+  LessonMaterial 
+} from '../types';
+import { db, auth } from '../firebase';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  deleteDoc, 
+  collection, 
+  getDocs, 
+  query, 
+  where,
+  orderBy,
+  onSnapshot
+} from 'firebase/firestore';
 
-const STORAGE_KEYS = {
-  USERS: 'thcs_users_v1',
-  CURRENT_USER: 'thcs_current_user_v1',
-  ACTIVE_SESSION_TOKEN: 'thcs_active_session_token_v1',
-  QUESTIONS: 'thcs_questions_v1',
-  EXAMS: 'thcs_exams_v1',
-  ATTEMPTS: 'thcs_attempts_v1',
-  NEWS: 'thcs_news_v1',
-  NOTIFICATIONS: 'thcs_notifications_v1',
-  MATERIALS: 'thcs_materials_v1',
-  LAST_MODIFIED: 'thcs_last_modified_v1',
-  SITE_LOGO: 'thcs_site_logo_v1',
-};
-
+// Constants
 export const DEFAULT_SITE_LOGO = '/assets/aistudio/LOGO_WEB_05e2bec9.jpg';
-
-// Cross-tab real-time sync via BroadcastChannel
-export const dbSyncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
-  ? new BroadcastChannel('thcs_tin_hoc_db_sync_v1')
-  : null;
-
-export const authSessionChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
-  ? new BroadcastChannel('thcs_auth_session_v1')
-  : null;
-
-if (dbSyncChannel) {
-  dbSyncChannel.onmessage = (event) => {
-    if (event?.data?.type === 'DB_MUTATION' && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('thcs_remote_storage_updated', {
-        detail: event.data
-      }));
-    }
-  };
-}
-
-// Safe storage access
-function getItem<T>(key: string, fallback: T): T {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : fallback;
-  } catch (e) {
-    console.error('Error reading localStorage key', key, e);
-    return fallback;
-  }
-}
-
-function setItem<T>(key: string, value: T, broadcast = true): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, Date.now().toString());
-
-    // Trigger local & cross-tab background auto sync if key is content data
-    if (key !== STORAGE_KEYS.CURRENT_USER && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('thcs_storage_updated', { detail: { key } }));
-      
-      if (broadcast && dbSyncChannel) {
-        dbSyncChannel.postMessage({
-          type: 'DB_MUTATION',
-          key,
-          timestamp: Date.now()
-        });
-      }
-    }
-  } catch (e) {
-    console.error('Error writing localStorage key', key, e);
-  }
-}
-
 export const PROTECTED_ADMIN_ID = 'admin-protected';
 
+// Error handling helper
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: any;
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// Memory cache for quick synchronous access if needed, 
+// though async is preferred for Firebase
+let currentUserCache: User | null = null;
+
 export const StorageService = {
-  // Users
-  getUsers(): User[] {
-    return getItem<User[]>(STORAGE_KEYS.USERS, []);
-  },
-  
-  getCurrentUser(): User {
-    const users = this.getUsers();
-    const stored = getItem<User | null>(STORAGE_KEYS.CURRENT_USER, null);
-    if (stored) {
-      if (stored.role === 'guest' || stored.id === 'user-guest') {
-        return GUEST_USER;
-      }
-      const match = users.find(u => u.id === stored.id);
-      if (match) return match;
+  // --- Users ---
+  async getUsers(): Promise<User[]> {
+    try {
+      const snapshot = await getDocs(collection(db, 'users'));
+      return snapshot.docs.map(doc => doc.data() as User);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+      return [];
     }
-    return GUEST_USER; // default to Guest when visitor accesses site
+  },
+
+  getCurrentUser(): User {
+    // Fallback to local storage for the *current* session user if not in memory
+    if (currentUserCache) return currentUserCache;
+    const stored = localStorage.getItem('thcs_current_user_v1');
+    if (stored) {
+      currentUserCache = JSON.parse(stored);
+      return currentUserCache!;
+    }
+    // Default guest
+    return {
+      id: 'user-guest',
+      name: 'Khách truy cập',
+      role: 'guest',
+      code: 'GUEST',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      email: '',
+      school: 'THCS Ngô Quyền'
+    };
   },
 
   setCurrentUser(user: User): void {
-    setItem(STORAGE_KEYS.CURRENT_USER, user);
+    currentUserCache = user;
+    localStorage.setItem('thcs_current_user_v1', JSON.stringify(user));
   },
 
-  loginUser(user: User, deviceName?: string): { user: User; sessionToken: string } {
-    const sessionToken = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
-    const device = deviceName || this.getDeviceDescription();
+  async loginUser(user: User): Promise<User> {
     const updatedUser: User = {
       ...user,
-      activeSessionToken: sessionToken,
       lastLoginAt: new Date().toISOString(),
-      lastLoginDevice: device
+      lastLoginDevice: typeof navigator !== 'undefined' ? navigator.userAgent : 'Thiết bị Web'
     };
-
-    this.saveUser(updatedUser);
-    setItem(STORAGE_KEYS.CURRENT_USER, updatedUser);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION_TOKEN, sessionToken);
+    try {
+      await this.saveUser(updatedUser);
+    } catch (e) {
+      console.warn('Could not save login timestamp to Firestore, continuing with local login.', e);
     }
-
-    if (authSessionChannel) {
-      authSessionChannel.postMessage({
-        type: 'AUTH_LOGIN_NEW_DEVICE',
-        userId: user.id,
-        userCode: user.code,
-        userName: user.name,
-        sessionToken,
-        deviceName: device,
-        timestamp: Date.now()
-      });
-    }
-
-    return { user: updatedUser, sessionToken };
+    this.setCurrentUser(updatedUser);
+    return updatedUser;
   },
 
-  getCurrentSessionToken(): string {
-    if (typeof localStorage === 'undefined') return '';
-    return localStorage.getItem(STORAGE_KEYS.ACTIVE_SESSION_TOKEN) || '';
-  },
-
-  getDeviceDescription(): string {
-    if (typeof navigator === 'undefined') return 'Thiết bị người dùng';
-    const ua = navigator.userAgent;
-    let browser = 'Trình duyệt Web';
-    if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Google Chrome';
-    else if (ua.includes('Edg')) browser = 'Microsoft Edge';
-    else if (ua.includes('Firefox')) browser = 'Mozilla Firefox';
-    else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Apple Safari';
-
-    let os = 'Máy tính';
-    if (/iPad|iPhone|iPod/.test(ua)) os = 'iOS (iPhone/iPad)';
-    else if (/Android/.test(ua)) os = 'Thiết bị Android';
-    else if (/Windows/.test(ua)) os = 'Máy tính Windows';
-    else if (/Macintosh|Mac OS X/.test(ua)) os = 'Máy tính MacOS';
-    else if (/Linux/.test(ua)) os = 'Máy tính Linux';
-
-    return `${os} • ${browser}`;
-  },
-
-  validateSession(currentUser: User): boolean {
-    if (!currentUser || currentUser.role === 'guest' || currentUser.id === 'user-guest') {
-      return true;
-    }
-    const users = this.getUsers();
-    const latestUser = users.find(u => u.id === currentUser.id);
-    if (!latestUser) return false;
+  async initialize(initialData: { 
+    users: User[], 
+    questions: Question[], 
+    exams: Exam[], 
+    news: NewsArticle[], 
+    materials: LessonMaterial[] 
+  }): Promise<void> {
+    const { signInAnonymously, onAuthStateChanged } = await import('firebase/auth');
     
-    const localToken = this.getCurrentSessionToken();
-    // If the latest record in database has a session token and local token doesn't match, session is expired
-    if (latestUser.activeSessionToken && localToken && latestUser.activeSessionToken !== localToken) {
-      return false;
-    }
-    return true;
+    return new Promise((resolve) => {
+      // Set a safety timeout to ensure app doesn't hang forever
+      const timeout = setTimeout(() => {
+        console.warn('Firebase initialization timed out. Continuing without auth...');
+        resolve();
+      }, 5000);
+
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          try {
+            await signInAnonymously(auth);
+          } catch (error: any) {
+            if (error.code === 'auth/admin-restricted-operation') {
+              console.error('LỖI: Bạn cần kích hoạt "Anonymous Sign-in" trong Firebase Console (Authentication > Sign-in method).');
+            } else {
+              console.error('Anonymous auth failed:', error);
+            }
+            clearTimeout(timeout);
+            resolve(); // Resolve anyway so app can load
+          }
+        } else {
+          clearTimeout(timeout);
+          // Check if database needs seeding
+          try {
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            if (usersSnapshot.empty) {
+              console.log('Seeding initial data to Firestore...');
+              await Promise.all([
+                ...initialData.users.map(u => setDoc(doc(db, 'users', u.id), u)),
+                ...initialData.questions.map(q => setDoc(doc(db, 'questions', q.id), q)),
+                ...initialData.exams.map(e => setDoc(doc(db, 'exams', e.id), e)),
+                ...initialData.news.map(n => setDoc(doc(db, 'news', n.id), n)),
+                ...initialData.materials.map(m => setDoc(doc(db, 'materials', m.id), m))
+              ]);
+              console.log('Seeding completed successfully.');
+            }
+          } catch (error) {
+            console.error('Error checking/seeding data:', error);
+          }
+          resolve();
+        }
+      });
+    });
   },
 
   logoutUser(): void {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION_TOKEN);
+    currentUserCache = null;
+    localStorage.removeItem('thcs_current_user_v1');
+  },
+
+  async saveUser(user: User): Promise<User> {
+    try {
+      await setDoc(doc(db, 'users', user.id), user);
+      return user;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
+      return user;
     }
-    setItem(STORAGE_KEYS.CURRENT_USER, GUEST_USER);
   },
 
-  saveUser(user: User): User {
-    const users = this.getUsers();
-    const index = users.findIndex(u => u.id === user.id);
-    let updated: User[];
-    if (index >= 0) {
-      updated = [...users];
-      updated[index] = user;
-    } else {
-      updated = [user, ...users];
-    }
-    setItem(STORAGE_KEYS.USERS, updated);
-    return user;
-  },
-
-  saveUsersBatch(newUsers: User[]): User[] {
-    const users = this.getUsers();
-    const existingMap = new Map<string, User>(users.map(u => [u.id, u]));
-    newUsers.forEach(u => {
-      existingMap.set(u.id, u);
-    });
-    const updated: User[] = Array.from(existingMap.values());
-    setItem(STORAGE_KEYS.USERS, updated);
-    return updated;
-  },
-
-  deleteUser(id: string): void {
+  async deleteUser(id: string): Promise<void> {
     if (id === PROTECTED_ADMIN_ID) {
       console.warn('Cannot delete protected admin user');
       return;
     }
-    const users = this.getUsers().filter(u => u.id !== id);
-    setItem(STORAGE_KEYS.USERS, users);
-  },
-
-  deleteUsersBatch(ids: string[]): User[] {
-    const idSet = new Set(ids);
-    if (idSet.has(PROTECTED_ADMIN_ID)) {
-      console.warn('Cannot delete protected admin user');
-      // Remove protected ID from list of IDs to delete
-      idSet.delete(PROTECTED_ADMIN_ID);
+    try {
+      await deleteDoc(doc(db, 'users', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
     }
-    const users = this.getUsers().filter(u => !idSet.has(u.id));
-    setItem(STORAGE_KEYS.USERS, users);
-    return users;
   },
 
-  // Site Logo Management
+  // --- Questions ---
+  async getQuestions(): Promise<Question[]> {
+    try {
+      const snapshot = await getDocs(collection(db, 'questions'));
+      return snapshot.docs.map(doc => doc.data() as Question);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'questions');
+      return [];
+    }
+  },
+
+  async saveQuestion(question: Question): Promise<Question> {
+    try {
+      await setDoc(doc(db, 'questions', question.id), question);
+      return question;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `questions/${question.id}`);
+      return question;
+    }
+  },
+
+  async deleteQuestion(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'questions', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `questions/${id}`);
+    }
+  },
+
+  // --- Exams ---
+  async getExams(): Promise<Exam[]> {
+    try {
+      const snapshot = await getDocs(collection(db, 'exams'));
+      return snapshot.docs.map(doc => doc.data() as Exam);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'exams');
+      return [];
+    }
+  },
+
+  async saveExam(exam: Exam): Promise<Exam> {
+    try {
+      await setDoc(doc(db, 'exams', exam.id), exam);
+      return exam;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `exams/${exam.id}`);
+      return exam;
+    }
+  },
+
+  async deleteExam(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'exams', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `exams/${id}`);
+    }
+  },
+
+  // --- Attempts ---
+  async getAttempts(): Promise<ExamAttempt[]> {
+    try {
+      const snapshot = await getDocs(query(collection(db, 'attempts'), orderBy('submittedAt', 'desc')));
+      return snapshot.docs.map(doc => doc.data() as ExamAttempt);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'attempts');
+      return [];
+    }
+  },
+
+  async saveAttempt(attempt: ExamAttempt): Promise<ExamAttempt> {
+    try {
+      await setDoc(doc(db, 'attempts', attempt.id), attempt);
+      return attempt;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `attempts/${attempt.id}`);
+      return attempt;
+    }
+  },
+
+  async deleteAttempt(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'attempts', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `attempts/${id}`);
+    }
+  },
+
+  // --- News ---
+  async getNews(): Promise<NewsArticle[]> {
+    try {
+      const snapshot = await getDocs(query(collection(db, 'news'), orderBy('publishedAt', 'desc')));
+      return snapshot.docs.map(doc => doc.data() as NewsArticle);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'news');
+      return [];
+    }
+  },
+
+  async saveNews(article: NewsArticle): Promise<NewsArticle> {
+    try {
+      await setDoc(doc(db, 'news', article.id), article);
+      return article;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `news/${article.id}`);
+      return article;
+    }
+  },
+
+  async deleteNews(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'news', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `news/${id}`);
+    }
+  },
+
+  // --- Materials ---
+  async getMaterials(): Promise<LessonMaterial[]> {
+    try {
+      const snapshot = await getDocs(collection(db, 'materials'));
+      return snapshot.docs.map(doc => doc.data() as LessonMaterial);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'materials');
+      return [];
+    }
+  },
+
+  async saveMaterial(material: LessonMaterial): Promise<LessonMaterial> {
+    try {
+      await setDoc(doc(db, 'materials', material.id), material);
+      return material;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `materials/${material.id}`);
+      return material;
+    }
+  },
+
+  async deleteMaterial(id: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'materials', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `materials/${id}`);
+    }
+  },
+
+  // --- Site Logo ---
   getSiteLogo(): string {
-    if (typeof localStorage === 'undefined') return DEFAULT_SITE_LOGO;
-    return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_SITE_LOGO;
+    return localStorage.getItem('thcs_site_logo_v1') || DEFAULT_SITE_LOGO;
   },
 
   setSiteLogo(logoUrl: string | null): void {
-    if (typeof localStorage === 'undefined') return;
-    if (logoUrl && logoUrl !== DEFAULT_SITE_LOGO) {
-      localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logoUrl);
+    if (logoUrl) {
+      localStorage.setItem('thcs_site_logo_v1', logoUrl);
     } else {
-      localStorage.removeItem(STORAGE_KEYS.SITE_LOGO);
-    }
-    const finalLogo = logoUrl || DEFAULT_SITE_LOGO;
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('thcs_site_logo_updated', { detail: { logo: finalLogo } }));
-    }
-    if (dbSyncChannel) {
-      dbSyncChannel.postMessage({
-        type: 'LOGO_MUTATION',
-        logo: finalLogo,
-        timestamp: Date.now()
-      });
+      localStorage.removeItem('thcs_site_logo_v1');
     }
   },
 
-  // Questions
-  getQuestions(): Question[] {
-    const raw = getItem<Question[]>(STORAGE_KEYS.QUESTIONS, []);
-    return raw.map(q => ({ ...q, subject: 'Tin học' as const }));
-  },
-
-  saveQuestion(question: Question): Question {
-    const questions = this.getQuestions();
-    const index = questions.findIndex(q => q.id === question.id);
-    let updated: Question[];
-    if (index >= 0) {
-      updated = [...questions];
-      updated[index] = { ...question, subject: 'Tin học' };
-    } else {
-      updated = [{ ...question, subject: 'Tin học' }, ...questions];
+  // --- Notifications ---
+  async getNotifications(): Promise<NotificationItem[]> {
+    try {
+      const snapshot = await getDocs(query(collection(db, 'notifications'), orderBy('timestamp', 'desc')));
+      return snapshot.docs.map(doc => doc.data() as NotificationItem);
+    } catch (error) {
+      // Non-critical, just return empty
+      return [];
     }
-    setItem(STORAGE_KEYS.QUESTIONS, updated);
-    return question;
   },
 
-  deleteQuestion(id: string): void {
-    const questions = this.getQuestions().filter(q => q.id !== id);
-    setItem(STORAGE_KEYS.QUESTIONS, questions);
-  },
+  // --- Listeners for Real-time Sync ---
+  subscribeToAll(onUpdate: () => void) {
+    const unsubUsers = onSnapshot(collection(db, 'users'), onUpdate);
+    const unsubExams = onSnapshot(collection(db, 'exams'), onUpdate);
+    const unsubNews = onSnapshot(collection(db, 'news'), onUpdate);
+    const unsubMaterials = onSnapshot(collection(db, 'materials'), onUpdate);
+    const unsubAttempts = onSnapshot(collection(db, 'attempts'), onUpdate);
 
-  // Exams
-  getExams(): Exam[] {
-    const raw = getItem<Exam[]>(STORAGE_KEYS.EXAMS, []);
-    return raw.map(e => ({
-      ...e,
-      subject: 'Tin học' as const,
-      questions: e.questions?.map(q => ({ ...q, subject: 'Tin học' as const })) || []
-    }));
-  },
-
-  saveExam(exam: Exam): Exam {
-    const exams = this.getExams();
-    const index = exams.findIndex(e => e.id === exam.id);
-    let updated: Exam[];
-    const sanitizedExam = {
-      ...exam,
-      subject: 'Tin học' as const,
-      questions: exam.questions?.map(q => ({ ...q, subject: 'Tin học' as const })) || []
+    return () => {
+      unsubUsers();
+      unsubExams();
+      unsubNews();
+      unsubMaterials();
+      unsubAttempts();
     };
-    if (index >= 0) {
-      updated = [...exams];
-      updated[index] = sanitizedExam;
-    } else {
-      updated = [sanitizedExam, ...exams];
-    }
-    setItem(STORAGE_KEYS.EXAMS, updated);
-    return sanitizedExam;
   },
 
-  deleteExam(id: string): void {
-    const exams = this.getExams().filter(e => e.id !== id);
-    setItem(STORAGE_KEYS.EXAMS, exams);
+  // Mock methods to satisfy previous interfaces if needed
+  resetAllData() {
+    console.warn('Reset all data not supported for Firebase directly through this method.');
+  },
+  
+  exportBackup() {
+    return JSON.stringify({ message: "Use Firebase Console for backups" });
+  },
+  
+  importBackup(json?: string, verbose = true) {
+    return false;
   },
 
-  // Exam Attempts
-  getAttempts(): ExamAttempt[] {
-    const raw = getItem<ExamAttempt[]>(STORAGE_KEYS.ATTEMPTS, []);
-    return raw.map(a => ({ ...a, subject: 'Tin học' as const }));
-  },
-
-  saveAttempt(attempt: ExamAttempt): ExamAttempt {
-    const attempts = this.getAttempts();
-    const index = attempts.findIndex(a => a.id === attempt.id);
-    let updated: ExamAttempt[];
-    const sanitized = { ...attempt, subject: 'Tin học' as const };
-    if (index >= 0) {
-      updated = [...attempts];
-      updated[index] = sanitized;
-    } else {
-      updated = [sanitized, ...attempts];
-    }
-    setItem(STORAGE_KEYS.ATTEMPTS, updated);
-    return sanitized;
-  },
-
-  getStudentAttempts(studentId: string): ExamAttempt[] {
-    return this.getAttempts().filter(a => a.studentId === studentId);
-  },
-
-  deleteAttempt(id: string): void {
-    const attempts = this.getAttempts().filter(a => a.id !== id);
-    setItem(STORAGE_KEYS.ATTEMPTS, attempts);
-  },
-
-  deleteAttemptsBatch(ids: string[]): void {
-    const attempts = this.getAttempts().filter(a => !ids.includes(a.id));
-    setItem(STORAGE_KEYS.ATTEMPTS, attempts);
-  },
-
-  // News
-  getNews(): NewsArticle[] {
-    const raw = getItem<NewsArticle[]>(STORAGE_KEYS.NEWS, []);
-    return raw.map(item => {
-      if (item.category !== 'Thông báo chung' && item.category !== 'Góc học tập') {
-        return { ...item, category: 'Thông báo chung' as const };
-      }
-      return item;
-    });
-  },
-
-  saveNews(article: NewsArticle): NewsArticle {
-    const newsList = this.getNews();
-    const index = newsList.findIndex(n => n.id === article.id);
-    let updated: NewsArticle[];
-    if (index >= 0) {
-      updated = [...newsList];
-      updated[index] = article;
-    } else {
-      updated = [article, ...newsList];
-    }
-    setItem(STORAGE_KEYS.NEWS, updated);
-    return article;
-  },
-
-  deleteNews(id: string): void {
-    const newsList = this.getNews().filter(n => n.id !== id);
-    setItem(STORAGE_KEYS.NEWS, newsList);
-  },
-
-  likeNews(id: string): NewsArticle | null {
-    const newsList = this.getNews();
-    const article = newsList.find(n => n.id === id);
-    if (!article) return null;
-    article.likes += 1;
-    this.saveNews(article);
-    return article;
-  },
-
-  addComment(articleId: string, authorName: string, role: any, avatar: string, content: string): NewsArticle | null {
-    const newsList = this.getNews();
-    const article = newsList.find(n => n.id === articleId);
-    if (!article) return null;
-    const newComment = {
-      id: 'c-' + Date.now(),
-      authorName,
-      authorRole: role,
-      authorAvatar: avatar,
-      content,
-      createdAt: new Date().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
-    };
-    article.comments = [newComment, ...article.comments];
-    this.saveNews(article);
-    return article;
-  },
-
-  // Notifications
-  getNotifications(): NotificationItem[] {
-    return getItem<NotificationItem[]>(STORAGE_KEYS.NOTIFICATIONS, []);
-  },
-
-  markNotificationRead(id: string): void {
-    const list = this.getNotifications().map(n => n.id === id ? { ...n, read: true } : n);
-    setItem(STORAGE_KEYS.NOTIFICATIONS, list);
-  },
-
-  // Materials (Bài giảng & Giáo án)
-  getMaterials(): LessonMaterial[] {
-    return getItem<LessonMaterial[]>(STORAGE_KEYS.MATERIALS, []);
-  },
-
-  saveMaterial(mat: LessonMaterial): LessonMaterial {
-    const list = this.getMaterials();
-    const index = list.findIndex(m => m.id === mat.id);
-    let updated: LessonMaterial[];
-    if (index >= 0) {
-      updated = [...list];
-      updated[index] = mat;
-    } else {
-      updated = [mat, ...list];
-    }
-    setItem(STORAGE_KEYS.MATERIALS, updated);
-    return mat;
-  },
-
-  deleteMaterial(id: string): void {
-    const list = this.getMaterials().filter(m => m.id !== id);
-    setItem(STORAGE_KEYS.MATERIALS, list);
-  },
-
-  incrementMaterialDownload(id: string): void {
-    const list = this.getMaterials().map(m => m.id === id ? { ...m, downloadCount: (m.downloadCount || 0) + 1 } : m);
-    setItem(STORAGE_KEYS.MATERIALS, list);
-  },
-
-  incrementMaterialView(id: string): void {
-    const list = this.getMaterials().map(m => m.id === id ? { ...m, viewCount: (m.viewCount || 0) + 1 } : m);
-    setItem(STORAGE_KEYS.MATERIALS, list);
-  },
-
-  // Reset to default seed data
-  resetAllData(): void {
-    setItem(STORAGE_KEYS.USERS, INITIAL_USERS);
-    setItem(STORAGE_KEYS.CURRENT_USER, GUEST_USER);
-    setItem(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTIONS);
-    setItem(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
-    setItem(STORAGE_KEYS.ATTEMPTS, INITIAL_ATTEMPTS);
-    setItem(STORAGE_KEYS.NEWS, INITIAL_NEWS);
-    setItem(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
-    setItem(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
-  },
-
-  // Export full JSON database
-  exportBackup(): string {
-    return JSON.stringify(this.getDatabasePayload(), null, 2);
-  },
-
+  // Legacy stubs for CloudflareService compatibility
   getDatabasePayload() {
-    return {
-      users: this.getUsers(),
-      questions: this.getQuestions(),
-      exams: this.getExams(),
-      attempts: this.getAttempts(),
-      news: this.getNews(),
-      materials: this.getMaterials(),
-      exportedAt: new Date().toISOString(),
-      lastModified: Number(localStorage.getItem(STORAGE_KEYS.LAST_MODIFIED) || Date.now())
-    };
+    return {};
   },
 
-  // Smart non-destructive merge from remote cloud database
-  smartMergeBackup(remoteData: any): { updated: boolean; newAttemptsCount: number } {
-    try {
-      if (!remoteData || typeof remoteData !== 'object') return { updated: false, newAttemptsCount: 0 };
-
-      let hasChanges = false;
-      let newAttemptsCount = 0;
-
-      const isDifferent = (a: any, b: any) => JSON.stringify(a) !== JSON.stringify(b);
-
-      // 1. Merge Attempts (Union by ID & update if changed)
-      if (Array.isArray(remoteData.attempts)) {
-        const localAttempts = this.getAttempts();
-        const localMap = new Map<string, ExamAttempt>(localAttempts.map(a => [a.id, a]));
-        
-        remoteData.attempts.forEach((remAtt: ExamAttempt) => {
-          const existing = localMap.get(remAtt.id);
-          if (!existing || isDifferent(existing, remAtt)) {
-            if (!existing) newAttemptsCount++;
-            localMap.set(remAtt.id, remAtt);
-            hasChanges = true;
-          }
-        });
-
-        if (hasChanges) {
-          const mergedAttempts = Array.from(localMap.values())
-            .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-          setItem(STORAGE_KEYS.ATTEMPTS, mergedAttempts, false);
-        }
-      }
-
-      // 2. Sync Exams (Add new, update modified, & remove deleted on remote)
-      if (Array.isArray(remoteData.exams)) {
-        const localExams = this.getExams();
-        const remoteExamIds = new Set(remoteData.exams.map((e: Exam) => e.id));
-        const filteredExams = localExams.filter(e => remoteExamIds.has(e.id));
-        const localMap = new Map<string, Exam>(filteredExams.map(e => [e.id, e]));
-        let examsChanged = localExams.length !== filteredExams.length;
-
-        remoteData.exams.forEach((remEx: Exam) => {
-          const existing = localMap.get(remEx.id);
-          if (!existing || isDifferent(existing, remEx)) {
-            localMap.set(remEx.id, remEx);
-            examsChanged = true;
-          }
-        });
-
-        if (examsChanged) {
-          setItem(STORAGE_KEYS.EXAMS, Array.from(localMap.values()), false);
-          hasChanges = true;
-        }
-      }
-
-      // 3. Sync Questions (Add new, update modified, & remove deleted on remote)
-      if (Array.isArray(remoteData.questions)) {
-        const localQuestions = this.getQuestions();
-        const remoteQIds = new Set(remoteData.questions.map((q: Question) => q.id));
-        const filteredQuestions = localQuestions.filter(q => remoteQIds.has(q.id));
-        const localMap = new Map<string, Question>(filteredQuestions.map(q => [q.id, q]));
-        let qChanged = localQuestions.length !== filteredQuestions.length;
-
-        remoteData.questions.forEach((remQ: Question) => {
-          const existing = localMap.get(remQ.id);
-          if (!existing || isDifferent(existing, remQ)) {
-            localMap.set(remQ.id, remQ);
-            qChanged = true;
-          }
-        });
-
-        if (qChanged) {
-          setItem(STORAGE_KEYS.QUESTIONS, Array.from(localMap.values()), false);
-          hasChanges = true;
-        }
-      }
-
-      // 4. Sync News (Add new, update modified, & remove deleted on remote)
-      if (Array.isArray(remoteData.news)) {
-        const localNews = this.getNews();
-        const remoteNewsIds = new Set(remoteData.news.map((n: NewsArticle) => n.id));
-        const filteredNews = localNews.filter(n => remoteNewsIds.has(n.id));
-        const localMap = new Map<string, NewsArticle>(filteredNews.map(n => [n.id, n]));
-        let newsChanged = localNews.length !== filteredNews.length;
-
-        remoteData.news.forEach((remN: NewsArticle) => {
-          const existing = localMap.get(remN.id);
-          if (!existing || isDifferent(existing, remN)) {
-            localMap.set(remN.id, remN);
-            newsChanged = true;
-          }
-        });
-
-        if (newsChanged) {
-          const mergedNews = Array.from(localMap.values())
-            .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-          setItem(STORAGE_KEYS.NEWS, mergedNews, false);
-          hasChanges = true;
-        }
-      }
-
-      // 5. Sync Users (Add new, update modified, & remove deleted on remote)
-      if (Array.isArray(remoteData.users)) {
-        const localUsers = this.getUsers();
-        const remoteUserIds = new Set(remoteData.users.map((u: User) => u.id));
-        const filteredUsers = localUsers.filter(u => remoteUserIds.has(u.id));
-        const localMap = new Map<string, User>(filteredUsers.map(u => [u.id, u]));
-        let usersChanged = localUsers.length !== filteredUsers.length;
-
-        remoteData.users.forEach((remU: User) => {
-          const existing = localMap.get(remU.id);
-          if (!existing || isDifferent(existing, remU)) {
-            localMap.set(remU.id, remU);
-            usersChanged = true;
-          }
-        });
-
-        if (usersChanged) {
-          setItem(STORAGE_KEYS.USERS, Array.from(localMap.values()), false);
-          hasChanges = true;
-        }
-      }
-
-      // 6. Sync Materials (Add new, update modified, & remove deleted on remote)
-      if (Array.isArray(remoteData.materials)) {
-        const localMat = this.getMaterials();
-        const remoteMatIds = new Set(remoteData.materials.map((m: LessonMaterial) => m.id));
-        const filteredMat = localMat.filter(m => remoteMatIds.has(m.id));
-        const localMap = new Map<string, LessonMaterial>(filteredMat.map(m => [m.id, m]));
-        let matChanged = localMat.length !== filteredMat.length;
-
-        remoteData.materials.forEach((remM: LessonMaterial) => {
-          const existing = localMap.get(remM.id);
-          if (!existing || isDifferent(existing, remM)) {
-            localMap.set(remM.id, remM);
-            matChanged = true;
-          }
-        });
-
-        if (matChanged) {
-          setItem(STORAGE_KEYS.MATERIALS, Array.from(localMap.values()), false);
-          hasChanges = true;
-        }
-      }
-
-      return { updated: hasChanges, newAttemptsCount };
-    } catch (e) {
-      console.error('smartMergeBackup failed', e);
-      return { updated: false, newAttemptsCount: 0 };
-    }
-  },
-
-  // Import JSON database
-  importBackup(jsonString: string, merge = false): boolean {
-    try {
-      const data = JSON.parse(jsonString);
-      if (merge) {
-        return this.smartMergeBackup(data).updated;
-      }
-      if (data.questions) setItem(STORAGE_KEYS.QUESTIONS, data.questions);
-      if (data.exams) setItem(STORAGE_KEYS.EXAMS, data.exams);
-      if (data.attempts) setItem(STORAGE_KEYS.ATTEMPTS, data.attempts);
-      if (data.news) setItem(STORAGE_KEYS.NEWS, data.news);
-      if (data.users) setItem(STORAGE_KEYS.USERS, data.users);
-      if (data.materials) setItem(STORAGE_KEYS.MATERIALS, data.materials);
-      return true;
-    } catch (e) {
-      console.error('Import failed', e);
-      return false;
-    }
-  },
-
-  // --- Moderation Handlers (Kiểm duyệt nội dung: Thầy Toàn & Admin) ---
-  approveNews(articleId: string, approverName: string): NewsArticle | null {
-    const list = this.getNews();
-    const idx = list.findIndex(n => n.id === articleId);
-    if (idx === -1) return null;
-    const updated: NewsArticle = {
-      ...list[idx],
-      approvalStatus: 'approved',
-      approvedBy: approverName,
-      approvedAt: new Date().toISOString()
-    };
-    list[idx] = updated;
-    setItem(STORAGE_KEYS.NEWS, list);
-    return updated;
-  },
-
-  rejectNews(articleId: string, reason: string, rejecterName: string): NewsArticle | null {
-    const list = this.getNews();
-    const idx = list.findIndex(n => n.id === articleId);
-    if (idx === -1) return null;
-    const updated: NewsArticle = {
-      ...list[idx],
-      approvalStatus: 'rejected',
-      rejectionReason: reason,
-      approvedBy: rejecterName,
-      approvedAt: new Date().toISOString()
-    };
-    list[idx] = updated;
-    setItem(STORAGE_KEYS.NEWS, list);
-    return updated;
-  },
-
-  approveExam(examId: string, approverName: string): Exam | null {
-    const list = this.getExams();
-    const idx = list.findIndex(e => e.id === examId);
-    if (idx === -1) return null;
-    const updated: Exam = {
-      ...list[idx],
-      approvalStatus: 'approved',
-      isPublished: true,
-      approvedBy: approverName,
-      approvedAt: new Date().toISOString()
-    };
-    list[idx] = updated;
-    setItem(STORAGE_KEYS.EXAMS, list);
-    return updated;
-  },
-
-  rejectExam(examId: string, reason: string, rejecterName: string): Exam | null {
-    const list = this.getExams();
-    const idx = list.findIndex(e => e.id === examId);
-    if (idx === -1) return null;
-    const updated: Exam = {
-      ...list[idx],
-      approvalStatus: 'rejected',
-      rejectionReason: reason,
-      approvedBy: rejecterName,
-      approvedAt: new Date().toISOString()
-    };
-    list[idx] = updated;
-    setItem(STORAGE_KEYS.EXAMS, list);
-    return updated;
-  },
-
-  approveMaterial(materialId: string, approverName: string): LessonMaterial | null {
-    const list = this.getMaterials();
-    const idx = list.findIndex(m => m.id === materialId);
-    if (idx === -1) return null;
-    const updated: LessonMaterial = {
-      ...list[idx],
-      approvalStatus: 'approved',
-      approvedBy: approverName,
-      approvedAt: new Date().toISOString()
-    };
-    list[idx] = updated;
-    setItem(STORAGE_KEYS.MATERIALS, list);
-    return updated;
-  },
-
-  rejectMaterial(materialId: string, reason: string, rejecterName: string): LessonMaterial | null {
-    const list = this.getMaterials();
-    const idx = list.findIndex(m => m.id === materialId);
-    if (idx === -1) return null;
-    const updated: LessonMaterial = {
-      ...list[idx],
-      approvalStatus: 'rejected',
-      rejectionReason: reason,
-      approvedBy: rejecterName,
-      approvedAt: new Date().toISOString()
-    };
-    list[idx] = updated;
-    setItem(STORAGE_KEYS.MATERIALS, list);
-    return updated;
+  smartMergeBackup(data: any) {
+    return { updated: false, newAttemptsCount: 0 };
   }
 };

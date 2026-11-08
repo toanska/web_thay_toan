@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "code": { "type": "string" },
+        "className": { "type": "string" },
+        "grade": { "type": "number" },
+        "pin": { "type": "string" },
+        "email": { "type": "string" },
+        "school": { "type": "string" },
+        "lastLoginAt": { "type": "string" },
+        "lastLoginDevice": { "type": "string" }
+      },
+      "required": ["id", "name", "role", "code", "email", "school"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Exam information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "code": { "type": "string" },
+        "subject": { "type": "string" },
+        "grade": { "type": "number" },
+        "isPublished": { "type": "boolean" }
+      },
+      "required": ["id", "title", "code", "subject", "grade"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Question information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id", "content", "type"]
+    },
+    "ExamAttempt": {
+      "title": "ExamAttempt",
+      "description": "Student exam attempts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "score": { "type": "number" },
+        "submittedAt": { "type": "string" }
+      },
+      "required": ["id", "examId", "studentId", "score", "submittedAt"]
+    },
+    "NewsArticle": {
+      "title": "NewsArticle",
+      "description": "News articles and announcements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "publishedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "content", "publishedAt"]
+    },
+    "LessonMaterial": {
+      "title": "LessonMaterial",
+      "description": "Educational materials",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id", "title", "type"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User documents"
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "Exam documents"
+    },
+    "/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Question bank"
+    },
+    "/attempts/{attemptId}": {
+      "schema": "ExamAttempt",
+      "description": "Exam attempts"
+    },
+    "/news/{newsId}": {
+      "schema": "NewsArticle",
+      "description": "News and announcements"
+    },
+    "/materials/{materialId}": {
+      "schema": "LessonMaterial",
+      "description": "Lesson materials"
+    }
+  }
+}
