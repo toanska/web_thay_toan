@@ -245,24 +245,29 @@ export function App() {
   };
 
   // --- Materials (Bài giảng & Giáo án) handlers ---
+  // --- Materials (Bài giảng & Giáo án) handlers ---
   const handleSaveMaterial = (material: LessonMaterial) => {
     StorageService.saveMaterial(material);
     setMaterials(StorageService.getMaterials());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDeleteMaterial = (id: string) => {
     StorageService.deleteMaterial(id);
     setMaterials(StorageService.getMaterials());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleIncrementMaterialDownload = (id: string) => {
     StorageService.incrementMaterialDownload(id);
     setMaterials(StorageService.getMaterials());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleIncrementMaterialView = (id: string) => {
     StorageService.incrementMaterialView(id);
     setMaterials(StorageService.getMaterials());
+    CloudflareService.triggerAutoSync();
   };
 
   // --- News handlers ---
@@ -270,47 +275,56 @@ export function App() {
     StorageService.saveNews(article);
     setNews(StorageService.getNews());
     setEditingNews(undefined);
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDeleteNews = (id: string) => {
     StorageService.deleteNews(id);
     setNews(StorageService.getNews());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleLikeNews = (id: string) => {
     StorageService.likeNews(id);
     setNews(StorageService.getNews());
+    CloudflareService.triggerAutoSync();
   };
 
   // --- Content Moderation Handlers (Kiểm duyệt: Thầy Toàn & Admin) ---
   const handleApproveNews = (id: string) => {
     StorageService.approveNews(id, currentUser.name);
     setNews(StorageService.getNews());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleRejectNews = (id: string, reason: string) => {
     StorageService.rejectNews(id, reason, currentUser.name);
     setNews(StorageService.getNews());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleApproveMaterial = (id: string) => {
     StorageService.approveMaterial(id, currentUser.name);
     setMaterials(StorageService.getMaterials());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleRejectMaterial = (id: string, reason: string) => {
     StorageService.rejectMaterial(id, reason, currentUser.name);
     setMaterials(StorageService.getMaterials());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleApproveExam = (id: string) => {
     StorageService.approveExam(id, currentUser.name);
     setExams(StorageService.getExams());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleRejectExam = (id: string, reason: string) => {
     StorageService.rejectExam(id, reason, currentUser.name);
     setExams(StorageService.getExams());
+    CloudflareService.triggerAutoSync();
   };
 
   // --- Student User handlers ---
@@ -321,11 +335,13 @@ export function App() {
     if (currentUser.id === user.id) {
       setCurrentUser(user);
     }
+    CloudflareService.triggerAutoSync();
   };
 
   const handleSaveUsersBatch = (newUsers: User[]) => {
     const updatedUsers = StorageService.saveUsersBatch(newUsers);
     setAvailableUsers(updatedUsers);
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDeleteUser = (id: string) => {
@@ -335,6 +351,7 @@ export function App() {
     if (currentUser.id === id) {
       handleUserChange(updatedUsers[0]);
     }
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDeleteUsersBatch = (ids: string[]) => {
@@ -343,6 +360,7 @@ export function App() {
     if (ids.includes(currentUser.id)) {
       handleUserChange(updatedUsers[0]);
     }
+    CloudflareService.triggerAutoSync();
   };
 
   // --- Question Bank handlers ---
@@ -350,11 +368,13 @@ export function App() {
     StorageService.saveQuestion(question);
     setQuestions(StorageService.getQuestions());
     setEditingQuestion(undefined);
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDeleteQuestion = (id: string) => {
     StorageService.deleteQuestion(id);
     setQuestions(StorageService.getQuestions());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDuplicateQuestion = (q: Question) => {
@@ -366,6 +386,7 @@ export function App() {
     };
     StorageService.saveQuestion(duplicated);
     setQuestions(StorageService.getQuestions());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleSaveAIBatchQuestions = (newQuestions: Question[]) => {
@@ -374,11 +395,11 @@ export function App() {
     });
     setQuestions(StorageService.getQuestions());
     setIsAIGeneratorOpen(false);
+    CloudflareService.triggerAutoSync();
   };
 
   // --- Exam handlers ---
   const handleSaveExam = (exam: Exam) => {
-    // Also sync questions into Question Bank for future reuse
     if (exam.questions && exam.questions.length > 0) {
       exam.questions.forEach(q => {
         StorageService.saveQuestion(q);
@@ -388,11 +409,13 @@ export function App() {
     StorageService.saveExam(exam);
     setExams(StorageService.getExams());
     setEditingExam(undefined);
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDeleteExam = (id: string) => {
     StorageService.deleteExam(id);
     setExams(StorageService.getExams());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleDuplicateExam = (ex: Exam) => {
@@ -405,6 +428,7 @@ export function App() {
     };
     StorageService.saveExam(duplicated);
     setExams(StorageService.getExams());
+    CloudflareService.triggerAutoSync();
   };
 
   const handleStartExam = (exam: Exam) => {

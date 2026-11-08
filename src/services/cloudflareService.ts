@@ -334,6 +334,17 @@ export const CloudflareService = {
     }
   },
 
+  // Forcefully clear all local storage keys related to app data to resolve stuck stale data
+  forceClearLocalStorage(): void {
+    if (typeof localStorage === 'undefined') return;
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('thcs_')) {
+        localStorage.removeItem(key);
+      }
+    });
+    window.location.reload();
+  },
+
   // Immediate auto-push when local state changes
   triggerAutoSync(): void {
     const config = this.getConfig();
@@ -349,12 +360,12 @@ export const CloudflareService = {
     // 1. Clear stale cache / temp local data and force fresh pull on startup/reload from cloud
     const initialConfig = this.getConfig();
     if (initialConfig.enabled && initialConfig.workerUrl) {
-      // Clear legacy/stale local keys if needed, then pull fresh payload
+      // Force a pull without merging (clean pull) to ensure fresh start
       this.pullDataFromCloud(initialConfig, false).then(res => {
-        if (onDataUpdated) {
+        if (res.updated && onDataUpdated) {
           onDataUpdated();
         }
-      }).catch(err => console.warn('Initial auto-sync pull failed:', err));
+      }).catch(err => console.error('Initial clean auto-sync pull failed (Check Worker setup):', err));
     }
 
     // 2. Periodic background poll interval
@@ -366,11 +377,11 @@ export const CloudflareService = {
           if (res.updated && onDataUpdated) {
             onDataUpdated();
           }
-        }).catch(() => {});
+        }).catch(err => console.warn('Periodic auto-sync pull failed:', err));
       }
     }, intervalSec * 1000);
 
-    // 3. Auto-sync on window focus (when teacher or student returns to browser tab)
+    // 3. Auto-sync on window focus
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
         const cfg = this.getConfig();

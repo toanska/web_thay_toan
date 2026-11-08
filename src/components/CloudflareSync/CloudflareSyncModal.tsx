@@ -410,6 +410,21 @@ export const CloudflareSyncModal: React.FC<CloudflareSyncModalProps> = ({
                     Lần đồng bộ gần nhất: <span className="font-semibold text-slate-700">{new Date(config.lastSyncedAt).toLocaleString('vi-VN')}</span>
                   </p>
                 )}
+
+                {/* Hard Reset */}
+                <div className="pt-6 border-t border-slate-200 mt-6">
+                  <button
+                    onClick={() => {
+                      if (confirm('CẢNH BÁO: Thao tác này sẽ XÓA TOÀN BỘ dữ liệu tạm trên máy này và tải lại từ đám mây. Bạn có chắc chắn muốn thực hiện?')) {
+                        CloudflareService.forceClearLocalStorage();
+                      }
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-rose-200"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Xóa tất cả dữ liệu tạm & Làm mới trang</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
