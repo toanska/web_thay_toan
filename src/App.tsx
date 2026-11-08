@@ -104,21 +104,14 @@ export function App() {
         StorageService.getUsers()
       ]);
 
-      // Only update if we actually got data or if Firestore is explicitly empty but working
-      // If Firestore fails (returns []), we should keep the existing data or mock data
-      if (newsData.length > 0) setNews(newsData);
-      if (materialsData.length > 0) setMaterials(materialsData);
-      if (examsData.length > 0) setExams(examsData);
-      if (questionsData.length > 0) setQuestions(questionsData);
-      
+      // Update state with actual database data
+      setNews(newsData);
+      setMaterials(materialsData);
+      setExams(examsData);
+      setQuestions(questionsData);
       setAttempts(attemptsData);
       setNotifications(notificationsData);
-      
-      if (usersData.length > 0) {
-        setAvailableUsers(usersData);
-      } else {
-        setAvailableUsers(INITIAL_USERS);
-      }
+      setAvailableUsers(usersData);
     } catch (err) {
       console.error('Failed to reload data:', err);
     }
@@ -150,12 +143,12 @@ export function App() {
 
       // 1. Subscribe to Real-time Firestore Updates (Immediate Automatic Sync)
       unsubRef.current = StorageService.subscribeToCollections({
-        onUsers: (data) => data.length > 0 ? setAvailableUsers(data) : setAvailableUsers(INITIAL_USERS),
-        onExams: (data) => data.length > 0 ? setExams(data) : setExams(INITIAL_EXAMS),
-        onNews: (data) => data.length > 0 ? setNews(data) : setNews(INITIAL_NEWS),
-        onMaterials: (data) => data.length > 0 ? setMaterials(data) : setMaterials(INITIAL_MATERIALS),
+        onUsers: (data) => setAvailableUsers(data),
+        onExams: (data) => setExams(data),
+        onNews: (data) => setNews(data),
+        onMaterials: (data) => setMaterials(data),
         onAttempts: (data) => setAttempts(data),
-        onQuestions: (data) => data.length > 0 ? setQuestions(data) : setQuestions(INITIAL_QUESTIONS),
+        onQuestions: (data) => setQuestions(data),
         onNotifications: (data) => setNotifications(data as any),
       });
     };
