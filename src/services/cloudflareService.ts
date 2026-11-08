@@ -354,11 +354,12 @@ export const CloudflareService = {
 
   // Setup background auto-sync polling loop and lifecycle listeners
   initAutoSyncLoop(onDataUpdated?: () => void): () => void {
-    // 1. Initial silent pull from cloud on startup
+    // 1. Clear stale cache / temp local data and force fresh pull on startup/reload from cloud
     const initialConfig = this.getConfig();
     if (initialConfig.enabled && initialConfig.workerUrl) {
-      this.pullDataFromCloud(initialConfig, true).then(res => {
-        if (res.updated && onDataUpdated) {
+      // Clear legacy/stale local keys if needed, then pull fresh payload
+      this.pullDataFromCloud(initialConfig, false).then(res => {
+        if (onDataUpdated) {
           onDataUpdated();
         }
       }).catch(err => console.warn('Initial auto-sync pull failed:', err));
