@@ -69,6 +69,8 @@ function setItem<T>(key: string, value: T, broadcast = true): void {
   }
 }
 
+export const PROTECTED_ADMIN_ID = 'admin-protected';
+
 export const StorageService = {
   // Users
   getUsers(): User[] {
@@ -194,8 +196,6 @@ export const StorageService = {
     setItem(STORAGE_KEYS.USERS, updated);
     return updated;
   },
-
-export const PROTECTED_ADMIN_ID = 'admin-protected';
 
   deleteUser(id: string): void {
     if (id === PROTECTED_ADMIN_ID) {
