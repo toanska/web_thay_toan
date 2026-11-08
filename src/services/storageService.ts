@@ -195,13 +195,24 @@ export const StorageService = {
     return updated;
   },
 
+export const PROTECTED_ADMIN_ID = 'admin-protected';
+
   deleteUser(id: string): void {
+    if (id === PROTECTED_ADMIN_ID) {
+      console.warn('Cannot delete protected admin user');
+      return;
+    }
     const users = this.getUsers().filter(u => u.id !== id);
     setItem(STORAGE_KEYS.USERS, users);
   },
 
   deleteUsersBatch(ids: string[]): User[] {
     const idSet = new Set(ids);
+    if (idSet.has(PROTECTED_ADMIN_ID)) {
+      console.warn('Cannot delete protected admin user');
+      // Remove protected ID from list of IDs to delete
+      idSet.delete(PROTECTED_ADMIN_ID);
+    }
     const users = this.getUsers().filter(u => !idSet.has(u.id));
     setItem(STORAGE_KEYS.USERS, users);
     return users;
