@@ -88,8 +88,12 @@ export async function uploadLessonFile(
   const timestamp = Date.now();
   const storagePath = `lessons/${metadata.visibility}/khoi-${metadata.grade}/${metadata.subject}/${timestamp}_${cleanName}`;
   
+  console.log('Attempting upload to:', storagePath, 'File:', file.name, file.size, file.type);
+  
   const storageRef = ref(storage, storagePath);
-  const uploadTask = uploadBytesResumable(storageRef, file);
+  const uploadTask = uploadBytesResumable(storageRef, file, {
+    contentType: file.type || 'application/octet-stream'
+  });
 
   if (cancelRef) {
     cancelRef.current = uploadTask;
@@ -100,9 +104,11 @@ export async function uploadLessonFile(
       'state_changed',
       (snapshot) => {
         const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+        console.log('Upload progress:', progress, '%');
         onProgress(progress);
       },
       (error) => {
+        console.error('Storage upload error:', error);
         reject(new Error(getFriendlyStorageError(error)));
       },
       async () => {

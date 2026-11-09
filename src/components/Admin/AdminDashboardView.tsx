@@ -31,7 +31,8 @@ import {
   Calendar,
   Key,
   XCircle,
-  Check
+  Check,
+  Presentation
 } from 'lucide-react';
 import { 
   User, 
@@ -44,6 +45,7 @@ import {
   Subject,
   NavigationTab
 } from '../../types';
+import { Lesson } from '../../services/lessonService';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
 import { RejectModal } from './RejectModal';
 import { AccountManagementView } from '../AccountManager/AccountManagementView';
@@ -54,6 +56,7 @@ interface AdminDashboardViewProps {
   news: NewsArticle[];
   materials: LessonMaterial[];
   exams: Exam[];
+  lessons: Lesson[];
   attempts: ExamAttempt[];
   questions: Question[];
   // Handlers
@@ -75,6 +78,7 @@ interface AdminDashboardViewProps {
   onRejectExam?: (id: string, reason: string) => void;
   onApproveMaterial?: (id: string) => void;
   onRejectMaterial?: (id: string, reason: string) => void;
+  onDeleteLesson: (id: string, storagePath?: string | null) => void;
   onOpenCreateQuestion: () => void;
   onEditQuestion: (question: Question) => void;
   onDeleteQuestion: (id: string) => void;
@@ -85,7 +89,7 @@ interface AdminDashboardViewProps {
   onNavigateToTab: (tab: NavigationTab) => void;
 }
 
-type AdminSection = 'overview' | 'accounts' | 'news' | 'materials' | 'exams' | 'attempts' | 'questions';
+type AdminSection = 'overview' | 'accounts' | 'news' | 'lessons' | 'exams' | 'attempts' | 'questions';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   currentUser,
@@ -93,6 +97,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   news,
   materials,
   exams,
+  lessons,
   attempts,
   questions,
   onSaveUser,
@@ -113,6 +118,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onRejectExam,
   onApproveMaterial,
   onRejectMaterial,
+  onDeleteLesson,
   onOpenCreateQuestion,
   onEditQuestion,
   onDeleteQuestion,
@@ -149,16 +155,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   }, [attempts]);
 
   const pendingNewsCount = useMemo(() => news.filter(n => n.approvalStatus === 'pending_approval').length, [news]);
-  const pendingMaterialsCount = useMemo(() => materials.filter(m => m.approvalStatus === 'pending_approval').length, [materials]);
   const pendingExamsCount = useMemo(() => exams.filter(e => e.approvalStatus === 'pending_approval').length, [exams]);
-  const totalPendingModeration = pendingNewsCount + pendingMaterialsCount + pendingExamsCount;
+  const totalPendingModeration = pendingNewsCount + pendingExamsCount;
 
   // Section items with counts
   const sections = [
     { id: 'overview', label: 'Tổng Quan', icon: ShieldCheck, badge: totalPendingModeration > 0 ? `${totalPendingModeration} cần duyệt` : 'Thống kê' },
     { id: 'accounts', label: 'Tài Khoản', icon: Users, count: users.length },
     { id: 'news', label: 'Tin Tức & Thông Báo', icon: Newspaper, count: news.length, pending: pendingNewsCount },
-    { id: 'materials', label: 'Bài Giảng & Giáo Án', icon: BookOpen, count: materials.length, pending: pendingMaterialsCount },
+    { id: 'lessons', label: 'Bài Giảng Cloud', icon: Presentation, count: lessons.length },
     { id: 'exams', label: 'Bài Kiểm Tra', icon: FileText, count: exams.length, pending: pendingExamsCount },
     { id: 'attempts', label: 'Lịch Sử & Kết Quả', icon: History, count: attempts.length },
     { id: 'questions', label: 'Ngân Hàng Câu Hỏi', icon: Database, count: questions.length },
@@ -328,16 +333,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
 
             <div 
-              onClick={() => setActiveSection('materials')}
+              onClick={() => setActiveSection('lessons')}
               className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase">Bài giảng & Giáo án</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">Bài giảng Cloud</span>
                 <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <BookOpen className="w-4 h-4" />
+                  <Presentation className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-2xl font-extrabold text-slate-900 mt-2">{materials.length}</div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-2">{lessons.length}</div>
               <p className="text-[11px] text-slate-500 mt-1">
                 {news.length} tin tức thông báo
               </p>
@@ -602,107 +607,36 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* ================= SECTION: BÀI GIẢNG & GIÁO ÁN ================= */}
-      {activeSection === 'materials' && (
+      {/* ================= SECTION: BÀI GIẢNG CLOUD ================= */}
+      {activeSection === 'lessons' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-teal-600" />
-                <span>Quản Lý Kho Bài Giảng & Giáo Án (KHBD 5512) ({materials.length})</span>
+                <Presentation className="w-5 h-5 text-teal-600" />
+                <span>Quản Lý Bài Giảng Cloud ({lessons.length})</span>
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Các học liệu môn Tin học khối 6, 7, 8, 9 được lưu trữ trên hệ thống
-              </p>
             </div>
-
-            <button
-              onClick={() => onNavigateToTab('materials')}
-              className="px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Mở Kho Học Liệu Đầy Đủ</span>
-            </button>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {materials.map(mat => {
-              const isPending = mat.approvalStatus === 'pending_approval';
-              const isRejected = mat.approvalStatus === 'rejected';
-              return (
-                <div key={mat.id} className={`p-4 rounded-2xl border transition-all space-y-3 bg-white flex flex-col justify-between ${
-                  isPending ? 'border-amber-300 ring-2 ring-amber-200/60 bg-amber-50/20' :
-                  isRejected ? 'border-rose-200 bg-rose-50/10' :
-                  'border-slate-200 hover:border-teal-300'
-                }`}>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 font-bold">Khối {mat.grade}</span>
-                        {isPending && (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            <span>Chờ duyệt</span>
-                          </span>
-                        )}
-                        {isRejected && (
-                          <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] flex items-center gap-1">
-                            <XCircle className="w-3 h-3 text-rose-600" />
-                            <span>Từ chối</span>
-                          </span>
-                        )}
-                        {mat.approvalStatus === 'approved' && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>Đã duyệt</span>
-                          </span>
-                        )}
-                      </div>
-                      <span>{mat.createdAt}</span>
-                    </div>
-                    <h4 className="font-bold text-sm text-slate-900 line-clamp-2">{mat.title}</h4>
-                    <p className="text-xs text-slate-500 line-clamp-2">{mat.description}</p>
-                    {isRejected && mat.rejectionReason && (
-                      <p className="text-[11px] text-rose-700 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                        <strong>Lý do từ chối:</strong> {mat.rejectionReason}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                    <span className="truncate max-w-[120px]">Tác giả: {mat.authorName}</span>
-                    <div className="flex items-center gap-1.5">
-                      {isPending && onApproveMaterial && (
-                        <button
-                          onClick={() => onApproveMaterial(mat.id)}
-                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
-                          title="Phê duyệt học liệu"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Duyệt</span>
-                        </button>
-                      )}
-                      {isPending && onRejectMaterial && (
-                        <button
-                          onClick={() => setRejectingItem({
-                            id: mat.id,
-                            type: 'tài liệu học tập',
-                            title: mat.title,
-                            category: 'material'
-                          })}
-                          className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
-                          title="Từ chối học liệu"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span>Từ chối</span>
-                        </button>
-                      )}
-                      <span className="font-bold text-teal-700 ml-1">{mat.downloadCount || 0} tải</span>
-                    </div>
-                  </div>
+          <div className="space-y-4">
+            {lessons.map(lesson => (
+              <div key={lesson.id} className="p-4 border border-slate-200 rounded-xl flex items-center justify-between hover:border-blue-300 transition-colors">
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">{lesson.title}</h4>
+                  <p className="text-xs text-slate-500">Khối {lesson.grade} • {lesson.subject}</p>
                 </div>
-              );
-            })}
+                <button
+                  onClick={() => {
+                    if (confirm(`Bạn có chắc muốn xóa bài giảng ${lesson.title}?`)) {
+                      onDeleteLesson(lesson.id, lesson.storagePath);
+                    }
+                  }}
+                  className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

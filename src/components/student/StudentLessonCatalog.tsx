@@ -18,7 +18,9 @@ import {
   ArrowRight,
   ShieldCheck,
   Upload,
-  Plus
+  Plus,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 import { Lesson, getPublicLessons } from '../../services/lessonService';
 import { StorageService } from '../../services/storageService';
@@ -31,13 +33,17 @@ interface StudentLessonCatalogProps {
   initialLessonId?: string | null;
   onTakeExam?: (examId: string) => void;
   onNavigateToUpload?: () => void;
+  onDeleteLesson: (id: string, storagePath?: string | null) => void;
+  onEditLesson: (lesson: Lesson) => void;
 }
 
 export const StudentLessonCatalog: React.FC<StudentLessonCatalogProps> = ({ 
   currentUser, 
   initialLessonId, 
   onTakeExam,
-  onNavigateToUpload 
+  onNavigateToUpload,
+  onDeleteLesson,
+  onEditLesson
 }) => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
@@ -321,10 +327,33 @@ export const StudentLessonCatalog: React.FC<StudentLessonCatalogProps> = ({
                     <span>{lesson.views || 0} lượt xem</span>
                   </span>
 
-                  <span className="font-bold text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    <span>Vào học ngay</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {isTeacherOrAdmin && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onEditLesson(lesson); }}
+                          className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Bạn có chắc muốn xóa bài giảng ${lesson.title}?`)) {
+                              onDeleteLesson(lesson.id, lesson.storagePath);
+                            }
+                          }}
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                    <span className="font-bold text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                      <span>Vào học</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
                 </div>
 
               </div>

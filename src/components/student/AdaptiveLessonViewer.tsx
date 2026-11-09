@@ -110,16 +110,31 @@ export const AdaptiveLessonViewer: React.FC<AdaptiveLessonViewerProps> = ({ less
                 </a>
                 
                 {lesson.allowDownload && (
-                  <a
-                    href={lesson.fileUrl}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(lesson.fileUrl);
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        // Force extension based on fileType
+                        const ext = lesson.fileType === 'pptx' ? '.pptx' : lesson.fileType === 'docx' ? '.docx' : lesson.fileType === 'pdf' ? '.pdf' : '';
+                        a.download = `${lesson.title}${ext}`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                      } catch (error) {
+                        console.error('Download failed:', error);
+                        window.open(lesson.fileUrl, '_blank');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Tải tệp về máy</span>
-                  </a>
+                  </button>
                 )}
               </div>
             </div>

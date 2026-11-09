@@ -19,30 +19,31 @@ import {
   RefreshCw 
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { uploadLessonFile, createLesson, Lesson } from '../../services/lessonService';
+import { uploadLessonFile, createLesson, updateLesson, Lesson } from '../../services/lessonService';
 import { UploadTask } from 'firebase/storage';
 
 interface TeacherLessonUploaderProps {
+  lessonToEdit?: Lesson;
   onClose?: () => void;
   onLessonCreated?: () => void;
 }
 
-export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ onClose, onLessonCreated }) => {
-  const [title, setTitle] = useState('');
-  const [grade, setGrade] = useState<'6' | '7' | '8' | '9'>('9');
-  const [subject, setSubject] = useState<'toan' | 'tin-hoc' | 'khac'>('tin-hoc');
-  const [semester, setSemester] = useState<'HK1' | 'HK2'>('HK1');
-  const [chapter, setChapter] = useState('Chủ đề 1: Máy tính và cộng đồng');
-  const [summary, setSummary] = useState('');
+export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ lessonToEdit, onClose, onLessonCreated }) => {
+  const [title, setTitle] = useState(lessonToEdit?.title || '');
+  const [grade, setGrade] = useState<'6' | '7' | '8' | '9'>(lessonToEdit?.grade || '9');
+  const [subject, setSubject] = useState<'toan' | 'tin-hoc' | 'khac'>(lessonToEdit?.subject || 'tin-hoc');
+  const [semester, setSemester] = useState<'HK1' | 'HK2'>(lessonToEdit?.semester || 'HK1');
+  const [chapter, setChapter] = useState(lessonToEdit?.chapter || 'Chủ đề 1: Máy tính và cộng đồng');
+  const [summary, setSummary] = useState(lessonToEdit?.summary || '');
   
-  const [sourceType, setSourceType] = useState<'firebase_file' | 'external_link'>('firebase_file');
+  const [sourceType, setSourceType] = useState<'firebase_file' | 'external_link'>(lessonToEdit?.sourceType || 'firebase_file');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [externalUrl, setExternalUrl] = useState('');
-  const [fileType, setFileType] = useState<Lesson['fileType']>('pdf');
+  const [externalUrl, setExternalUrl] = useState(lessonToEdit?.sourceType === 'external_link' ? lessonToEdit.fileUrl : '');
+  const [fileType, setFileType] = useState<Lesson['fileType']>(lessonToEdit?.fileType || 'pdf');
   
-  const [visibility, setVisibility] = useState<'public' | 'unlisted' | 'private'>('public');
-  const [allowDownload, setAllowDownload] = useState(true);
-  const [examId, setExamId] = useState('');
+  const [visibility, setVisibility] = useState<'public' | 'unlisted' | 'private'>(lessonToEdit?.visibility || 'public');
+  const [allowDownload, setAllowDownload] = useState(lessonToEdit ? lessonToEdit.allowDownload : true);
+  const [examId, setExamId] = useState(lessonToEdit?.examId || '');
 
   // Upload progress states
   const [isUploading, setIsUploading] = useState(false);
@@ -99,15 +100,11 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ on
     setUploadError(null);
 
     try {
-      let finalFileUrl = '';
-      let storagePath: string | null = null;
-      let calculatedSize = 0;
+      let finalFileUrl = lessonToEdit?.fileUrl || '';
+      let storagePath: string | null = lessonToEdit?.storagePath || null;
+      let calculatedSize = lessonToEdit?.fileSize || 0;
 
-      if (sourceType === 'firebase_file') {
-        if (!selectedFile) {
-          throw new Error('Vui lòng chọn tệp tin cần tải lên Firebase Storage.');
-        }
-
+      if (sourceType === 'firebase_file' && selectedFile) {
         const uploadRes = await uploadLessonFile(
           selectedFile,
           { grade, subject, visibility },
@@ -118,7 +115,7 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ on
         finalFileUrl = uploadRes.downloadUrl;
         storagePath = uploadRes.storagePath;
         calculatedSize = uploadRes.fileSize;
-      } else {
+      } else if (sourceType === 'external_link') {
         if (!externalUrl.trim()) {
           throw new Error('Vui lòng dán đường dẫn liên kết ngoài (Drive, YouTube, Canva, Scratch...).');
         }
@@ -126,30 +123,52 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ on
         calculatedSize = 1024; // Dummy size for links
       }
 
-      const newId = await createLesson({
-        title: title.trim(),
-        grade,
-        subject,
-        semester,
-        chapter: chapter.trim(),
-        summary: summary.trim(),
-        sourceType,
-        fileUrl: finalFileUrl,
-        storagePath,
-        fileType,
-        fileSize: calculatedSize,
-        visibility,
-        allowDownload,
-        examId: examId.trim() ? examId.trim() : null
-      });
+      if (lessonToEdit) {
+        await updateLesson(lessonToEdit.id, {
+          title: title.trim(),
+          grade,
+          subject,
+          semester,
+          chapter: chapter.trim(),
+          summary: summary.trim(),
+          sourceType,
+          fileUrl: finalFileUrl,
+          storagePath,
+          fileType,
+          fileSize: calculatedSize,
+          visibility,
+          allowDownload,
+          examId: examId.trim() ? examId.trim() : null
+        }, selectedFile ? lessonToEdit.storagePath : undefined, selectedFile || undefined);
+        
+        alert('Cập nhật bài giảng thành công!');
+        if (onLessonCreated) onLessonCreated();
+      } else {
+        const newId = await createLesson({
+          title: title.trim(),
+          grade,
+          subject,
+          semester,
+          chapter: chapter.trim(),
+          summary: summary.trim(),
+          sourceType,
+          fileUrl: finalFileUrl,
+          storagePath,
+          fileType,
+          fileSize: calculatedSize,
+          visibility,
+          allowDownload,
+          examId: examId.trim() ? examId.trim() : null
+        });
 
-      const shareUrl = `${window.location.origin}/?lesson=${newId}`;
-      setCreatedLessonId(newId);
-      setCreatedShareUrl(shareUrl);
-      setShowSuccessModal(true);
+        const shareUrl = `${window.location.origin}/?lesson=${newId}`;
+        setCreatedLessonId(newId);
+        setCreatedShareUrl(shareUrl);
+        setShowSuccessModal(true);
+      }
+
       setIsUploading(false);
-
-      if (onLessonCreated) onLessonCreated();
+      if (onLessonCreated && !lessonToEdit) onLessonCreated();
     } catch (err: any) {
       console.error(err);
       setUploadError(err.message || 'Có lỗi xảy ra khi lưu bài giảng.');
@@ -477,7 +496,7 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ on
               className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <Upload className="w-4 h-4" />
-              <span>{isUploading ? 'Đang tải lên đám mây...' : 'Đăng & Xuất bản bài giảng'}</span>
+              <span>{isUploading ? 'Đang tải lên đám mây...' : (lessonToEdit ? 'Cập nhật bài giảng' : 'Đăng & Xuất bản bài giảng')}</span>
             </button>
           </div>
 

@@ -28,6 +28,7 @@ import { updateDynamicMetadata } from './utils/seoHelper';
 
 import { StorageService } from './services/storageService';
 import { CloudflareService } from './services/cloudflareService';
+import { getPublicLessons, deleteLesson, Lesson } from './services/lessonService';
 import { 
   User, 
   NewsArticle, 
@@ -62,6 +63,7 @@ export function App() {
   // Domain state
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [materials, setMaterials] = useState<LessonMaterial[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
@@ -73,6 +75,7 @@ export function App() {
   const [editingNews, setEditingNews] = useState<NewsArticle | null | undefined>(undefined); // null = new, Article = edit, undefined = closed
   const [editingExam, setEditingExam] = useState<Exam | null | undefined>(undefined); // null = new, Exam = edit, undefined = closed
   const [editingQuestion, setEditingQuestion] = useState<Question | null | undefined>(undefined);
+  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [viewingAttempt, setViewingAttempt] = useState<ExamAttempt | null>(null);
   const [isCloudflareModalOpen, setIsCloudflareModalOpen] = useState(false);
@@ -92,6 +95,7 @@ export function App() {
       const [
         newsData, 
         materialsData, 
+        lessonsData,
         examsData, 
         questionsData, 
         attemptsData, 
@@ -100,6 +104,7 @@ export function App() {
       ] = await Promise.all([
         StorageService.getNews(),
         StorageService.getMaterials(),
+        getPublicLessons(),
         StorageService.getExams(),
         StorageService.getQuestions(),
         StorageService.getAttempts(),
@@ -110,6 +115,7 @@ export function App() {
       // Update state with actual database data
       setNews(newsData);
       setMaterials(materialsData);
+      setLessons(lessonsData);
       setExams(examsData);
       setQuestions(questionsData);
       setAttempts(attemptsData);
@@ -277,6 +283,13 @@ export function App() {
     });
     await StorageService.saveMaterial(material);
     setEditingNews(undefined);
+  };
+
+  const handleDeleteLesson = async (id: string, storagePath?: string | null) => {
+    if (confirm('Bạn có chắc chắn muốn xóa bài giảng này?')) {
+      setLessons(prev => prev.filter(l => l.id !== id));
+      await deleteLesson(id, storagePath);
+    }
   };
 
   const handleDeleteMaterial = async (id: string) => {
@@ -639,24 +652,17 @@ export function App() {
           />
         )}
 
-        {/* CHỨC NĂNG 1.5: Kho Bài Giảng Điện Tử & Giáo Án (KHBD 5512) */}
+        {/* CHỨC NĂNG 1.5: Đã hợp nhất vào Kho Thư Viện Bài Giảng chung */}
         {activeTab === 'materials' && (
-          <MaterialListView
-            materials={materials}
-            currentUser={currentUser}
-            onSaveMaterial={handleSaveMaterial}
-            onDeleteMaterial={handleDeleteMaterial}
-            onIncrementDownload={handleIncrementMaterialDownload}
-            onIncrementView={handleIncrementMaterialView}
-            onApproveMaterial={handleApproveMaterial}
-            onRejectMaterial={handleRejectMaterial}
-            onNavigateToLogin={() => setActiveTab('login')}
-          />
+          <div className="p-8 text-center bg-white rounded-2xl border border-slate-200">
+            <p className="text-slate-500">Chức năng này đã được hợp nhất vào Kho Thư Viện Bài Giảng chung.</p>
+          </div>
         )}
 
         {/* Thư viện bài giảng cloud cho học sinh & khách */}
         {activeTab === 'lessons' && (
           <StudentLessonCatalog
+            currentUser={currentUser}
             initialLessonId={typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('lesson') : null}
             onTakeExam={(examId) => {
               const foundExam = exams.find(e => e.id === examId);
@@ -666,14 +672,26 @@ export function App() {
                 alert(`Không tìm thấy đề kiểm tra với mã: ${examId}`);
               }
             }}
+            onDeleteLesson={handleDeleteLesson}
+            onEditLesson={(lesson) => {
+              setEditingLesson(lesson);
+              setActiveTab('teacher_lessons');
+            }}
           />
         )}
 
         {/* Phân hệ giáo viên upload bài giảng cloud */}
         {activeTab === 'teacher_lessons' && (
           <TeacherLessonUploader
-            onClose={() => setActiveTab('lessons')}
-            onLessonCreated={() => setActiveTab('lessons')}
+            lessonToEdit={editingLesson || undefined}
+            onClose={() => {
+              setEditingLesson(null);
+              setActiveTab('lessons');
+            }}
+            onLessonCreated={() => {
+              setEditingLesson(null);
+              setActiveTab('lessons');
+            }}
           />
         )}
 
@@ -715,6 +733,7 @@ export function App() {
             news={news}
             materials={materials}
             exams={exams}
+            lessons={lessons}
             attempts={attempts}
             questions={questions}
             onSaveUser={handleSaveUser}
@@ -735,6 +754,7 @@ export function App() {
             onRejectExam={handleRejectExam}
             onApproveMaterial={handleApproveMaterial}
             onRejectMaterial={handleRejectMaterial}
+            onDeleteLesson={handleDeleteLesson}
             onOpenCreateQuestion={() => setEditingQuestion(null)}
             onEditQuestion={(q) => setEditingQuestion(q)}
             onDeleteQuestion={handleDeleteQuestion}
