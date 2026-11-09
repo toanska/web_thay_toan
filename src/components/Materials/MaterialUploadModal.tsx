@@ -33,37 +33,36 @@ interface MaterialUploadModalProps {
 
 const INFORMATICS_UNITS: Record<GradeLevel, string[]> = {
   6: [
-    'Chủ đề A: Máy tính và cộng đồng (Thông tin & Thu nhận thông tin)',
-    'Chủ đề B: Mạng máy tính và Internet',
-    'Chủ đề C: Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
-    'Chủ đề D: Đạo đức, pháp luật và văn hóa trong môi trường số',
-    'Chủ đề E: Ứng dụng tin học (Soạn thảo văn bản & Sơ đồ tư duy)',
-    'Chủ đề F: Giải quyết vấn đề với sự trợ giúp của máy tính (Thuật toán)'
+    'Chủ đề 1. Máy tính và cộng đồng',
+    'Chủ đề 2. Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
+    'Chủ đề 3: Đạo đức, pháp luật và văn hóa trong môi trường số',
+    'Chủ đề 4: Ứng dụng tin học',
+    'Chủ đề 5: Giải quyết vấn đề với sự giúp đỡ của máy tính',
+    'Chủ đề 6: Hướng nghiệp với tin học'
   ],
   7: [
-    'Chủ đề A: Máy tính và cộng đồng (Thiết bị vào ra & Hệ điều hành)',
-    'Chủ đề B: Mạng máy tính và Internet (An toàn trên mạng)',
-    'Chủ đề C: Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
-    'Chủ đề D: Đạo đức, pháp luật và văn hóa trong môi trường số',
-    'Chủ đề E: Ứng dụng tin học (Bảng tính điện tử Excel)',
-    'Chủ đề F: Giải quyết vấn đề với sự trợ giúp của máy tính (Thuật toán tìm kiếm)'
+    'Chủ đề 1. Máy tính và cộng đồng',
+    'Chủ đề 2. Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
+    'Chủ đề 3: Đạo đức, pháp luật và văn hóa trong môi trường số',
+    'Chủ đề 4: Ứng dụng tin học',
+    'Chủ đề 5: Giải quyết vấn đề với sự giúp đỡ của máy tính',
+    'Chủ đề 6: Hướng nghiệp với tin học'
   ],
   8: [
-    'Chủ đề A: Máy tính và cộng đồng (Lịch sử phát triển máy tính)',
-    'Chủ đề B: Mạng máy tính và Internet (Bảo mật thông tin)',
-    'Chủ đề C: Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
-    'Chủ đề D: Đạo đức, pháp luật và văn hóa trong môi trường số',
-    'Chủ đề E: Ứng dụng tin học (Xử lý dữ liệu nâng cao)',
-    'Chủ đề F: Giải quyết vấn đề với sự trợ giúp của máy tính (Lập trình trực quan Scratch)'
+    'Chủ đề 1. Máy tính và cộng đồng',
+    'Chủ đề 2. Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
+    'Chủ đề 3: Đạo đức, pháp luật và văn hóa trong môi trường số',
+    'Chủ đề 4: Ứng dụng tin học',
+    'Chủ đề 5: Giải quyết vấn đề với sự giúp đỡ của máy tính',
+    'Chủ đề 6: Hướng nghiệp với tin học'
   ],
   9: [
-    'Chủ đề A: Máy tính và xã hội tri thức (Chất lượng thông tin)',
-    'Chủ đề B: Mạng máy tính và Internet (Dịch vụ đám mây)',
-    'Chủ đề C: Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
-    'Chủ đề D: Đạo đức, pháp luật và văn hóa trong môi trường số (Bản quyền số)',
-    'Chủ đề E: Ứng dụng tin học (Đa phương tiện & Thiết kế web cơ bản)',
-    'Chủ đề F: Giải quyết vấn đề với sự trợ giúp của máy tính (Lập trình Python/C++)',
-    'Chủ đề G: Hướng nghiệp với Tin học'
+    'Chủ đề 1. Máy tính và cộng đồng',
+    'Chủ đề 2. Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin',
+    'Chủ đề 3: Đạo đức, pháp luật và văn hóa trong môi trường số',
+    'Chủ đề 4: Ứng dụng tin học',
+    'Chủ đề 5: Giải quyết vấn đề với sự giúp đỡ của máy tính',
+    'Chủ đề 6: Hướng nghiệp với tin học'
   ]
 };
 
@@ -172,7 +171,7 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
     else if (ext === 'pdf') format = 'pdf';
     else if (ext === 'xlsx' || ext === 'xls') format = 'xlsx';
     else if (ext === 'zip' || ext === 'rar' || ext === '7z') format = 'zip';
-    else if (ext === 'mp4' || ext === 'mkv' || ext === 'mov') format = 'mp4';
+    else if (ext === 'mp4' || ext === 'mkv' || ext === 'mov' || ext === 'avi') format = 'mp4';
 
     setFileName(name);
     setFileSize(sizeStr);
@@ -191,13 +190,24 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
       setTitle(cleanName);
     }
 
-    // Read base64
+    // Extract text content if plain text or markdown
+    if (file.type.startsWith('text/') || ext === 'txt' || ext === 'md' || ext === 'csv') {
+      const textReader = new FileReader();
+      textReader.onload = (e) => {
+        if (typeof e.target?.result === 'string') {
+          setContentOutline(e.target.result);
+        }
+      };
+      textReader.readAsText(file);
+    }
+
+    // Read base64 data URL
     const reader = new FileReader();
     reader.onload = (e) => {
       if (e.target?.result) {
         setFileDataUrl(e.target.result as string);
         setUploadSuccessNotice(true);
-        setTimeout(() => setUploadSuccessNotice(false), 3000);
+        setTimeout(() => setUploadSuccessNotice(false), 3500);
       }
     };
     reader.readAsDataURL(file);
@@ -333,7 +343,7 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
                 id="material-file-input"
                 onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                 className="hidden"
-                accept=".pptx,.ppt,.docx,.doc,.pdf,.xlsx,.xls,.zip,.rar,.mp4"
+                accept=".pptx,.ppt,.docx,.doc,.pdf,.xlsx,.xls,.zip,.rar,.7z,.mp4,.mkv,.avi,.txt,.csv,.png,.jpg,.jpeg"
               />
               
               <div className="flex flex-col items-center justify-center space-y-3">

@@ -340,12 +340,28 @@ export const StorageService = {
 
   async saveMaterial(material: LessonMaterial): Promise<LessonMaterial> {
     try {
-      const sanitized = cleanForFirestore(material);
+      let sanitized = cleanForFirestore(material);
+      // Safe check: Firestore has a 1MB per document limit.
+      // If fileUrl base64 is larger than ~650KB, strip fileUrl for cloud sync while preserving all metadata & content outline.
+      if (sanitized.fileUrl && typeof sanitized.fileUrl === 'string' && sanitized.fileUrl.length > 650000) {
+        console.warn('Tệp có dung lượng base64 lớn (>650KB), lược bỏ fileUrl khi đồng bộ Firestore để tránh vượt quá giới hạn 1MB.');
+        delete sanitized.fileUrl;
+      }
       await setDoc(doc(db, 'materials', material.id), sanitized);
       return material;
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `materials/${material.id}`);
-      return material;
+      console.warn('Thử lại lưu bài giảng không kèm fileUrl lớn...', error);
+      try {
+        const safePayload = cleanForFirestore({
+          ...material,
+          fileUrl: undefined
+        });
+        await setDoc(doc(db, 'materials', material.id), safePayload);
+        return material;
+      } catch (retryErr) {
+        handleFirestoreError(retryErr, OperationType.WRITE, `materials/${material.id}`);
+        return material;
+      }
     }
   },
 
