@@ -23,6 +23,7 @@ import {
 import { LessonMaterial, GradeLevel, Subject, User } from '../../types';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
 import { compressImageFile } from '../../utils/dataCompressor';
+import { formatFileNameFromTitle } from '../../utils/fileExporter';
 
 interface MaterialUploadModalProps {
   isOpen: boolean;
@@ -252,6 +253,7 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
     }
 
     const isModerator = isTeacherToanOrAdmin(currentUser);
+    const autoFormattedFileName = formatFileNameFromTitle(title.trim(), fileFormat);
 
     const material: LessonMaterial = {
       id: editingMaterial ? editingMaterial.id : `mat-${Date.now()}`,
@@ -264,7 +266,7 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
       contentOutline: contentOutline.trim() || undefined,
       authorName: authorName.trim() || currentUser.name,
       authorRole: currentUser.role === 'admin' ? 'admin' : 'teacher',
-      fileName: fileName.trim() || `TaiLieu_TinHoc${grade}.${fileFormat}`,
+      fileName: autoFormattedFileName,
       fileSize: fileSize || '2.5 MB',
       fileFormat,
       fileUrl: fileDataUrl || undefined,

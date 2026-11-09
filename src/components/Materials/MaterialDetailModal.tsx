@@ -211,6 +211,45 @@ export const MaterialDetailModal: React.FC<MaterialDetailModalProps> = ({
             </div>
           </div>
 
+          {/* Embedded File Viewer (PDF, Image, Video) */}
+          {material.fileUrl && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-blue-600">
+                <Eye className="w-4 h-4" />
+                <span>Xem Trực Tiếp Nội Dung Tệp ({material.fileName})</span>
+              </h3>
+              
+              {/* PDF Viewer */}
+              {(material.fileFormat === 'pdf' || material.fileUrl.startsWith('data:application/pdf')) && (
+                <div className="w-full h-[500px] rounded-2xl overflow-hidden border border-slate-300 shadow-sm bg-slate-100">
+                  <iframe 
+                    src={material.fileUrl} 
+                    title={material.title} 
+                    className="w-full h-full border-none"
+                  />
+                </div>
+              )}
+
+              {/* Image Viewer */}
+              {(material.fileUrl.startsWith('data:image/') || material.fileFormat === 'jpg' || material.fileFormat === 'png') && (
+                <div className="p-2 rounded-2xl border border-slate-200 bg-slate-50 text-center">
+                  <img 
+                    src={material.fileUrl} 
+                    alt={material.title} 
+                    className="max-h-[500px] mx-auto rounded-xl object-contain shadow-sm"
+                  />
+                </div>
+              )}
+
+              {/* MP4 / Video Viewer */}
+              {(material.fileFormat === 'mp4' || material.fileUrl.startsWith('data:video/')) && (
+                <div className="w-full rounded-2xl overflow-hidden border border-slate-800 bg-black">
+                  <video src={material.fileUrl} controls className="w-full max-h-[450px]" />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Embedded YouTube Player */}
           {youtubeEmbedUrl && (
             <div className="space-y-2">

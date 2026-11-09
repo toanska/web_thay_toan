@@ -1,17 +1,41 @@
 import { LessonMaterial } from '../types';
 
 /**
+ * Auto-formats filename based on the lesson title and file format.
+ * E.g., title: "Bài 1 - Một số vấn đề về chất lượng thông tin", format: "pptx"
+ * Output: "Bai_1_Mot_so_van_de_ve_chat_luong_thong_tin.pptx"
+ */
+export function formatFileNameFromTitle(title: string, fileFormat: string = 'pptx'): string {
+  if (!title || !title.trim()) return `BaiGiang_TinHoc.${fileFormat || 'pptx'}`;
+  
+  let cleanName = title.trim()
+    .replace(/[/\\?%*:|"<>]/g, '')
+    .replace(/\s+/g, '_');
+    
+  const ext = fileFormat.startsWith('.') ? fileFormat : `.${fileFormat}`;
+  if (!cleanName.toLowerCase().endsWith(ext.toLowerCase())) {
+    cleanName = `${cleanName}${ext}`;
+  }
+  
+  return cleanName;
+}
+
+/**
  * Downloads a LessonMaterial file for students.
  * - If material has an attached binary file (Data URL), downloads the original file.
  * - If not, generates a rich formatted Word document (.doc) containing full lesson plan details,
  *   styled headers, and complete content outlines encoded with UTF-8 BOM (\uFEFF) for flawless Word viewing.
  */
 export function downloadLessonMaterialFile(material: LessonMaterial): void {
+  const targetFileName = material.fileName && material.fileName.trim() 
+    ? material.fileName 
+    : formatFileNameFromTitle(material.title, material.fileFormat);
+
   if (material.fileUrl && material.fileUrl.startsWith('data:')) {
     // Download direct attached file (PowerPoint, Word, PDF, Video, etc.)
     const a = document.createElement('a');
     a.href = material.fileUrl;
-    a.download = material.fileName || `BaiGiang_TinHoc${material.grade}.${material.fileFormat || 'pptx'}`;
+    a.download = targetFileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

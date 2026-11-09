@@ -97,14 +97,15 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
   // Filtered & Sorted list
   const filteredMaterials = useMemo(() => {
     return materials.filter(item => {
-      // Permission visibility rules
+      // Permission visibility rules for non-moderators (teachers, students, guests)
       if (!isModerator) {
         if (isTeacher) {
           const isAuthor = item.authorName === currentUser.name;
-          const isApproved = item.approvalStatus === 'approved' || item.approvalStatus === undefined;
+          const isApproved = !item.approvalStatus || item.approvalStatus === 'approved' || item.approvalStatus === 'pending_approval';
           if (!isApproved && !isAuthor) return false;
         } else {
-          const isApproved = item.approvalStatus === 'approved' || item.approvalStatus === undefined;
+          // For students and guests: show all approved, default, or pending materials published by teachers
+          const isApproved = !item.approvalStatus || item.approvalStatus === 'approved' || item.approvalStatus === 'pending_approval';
           if (!isApproved) return false;
         }
       }
@@ -116,7 +117,7 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
         if (moderationFilter === 'rejected' && item.approvalStatus !== 'rejected') return false;
       }
 
-      const matchGrade = selectedGrade === 'all' || item.grade === selectedGrade;
+      const matchGrade = selectedGrade === 'all' || Number(item.grade) === Number(selectedGrade);
       const matchType = selectedType === 'all' || item.type === selectedType;
       const query = searchQuery.toLowerCase().trim();
       const matchQuery = !query || 
