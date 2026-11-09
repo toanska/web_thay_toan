@@ -3,26 +3,15 @@ import {
   Lock, 
   User as UserIcon, 
   ShieldCheck, 
-  GraduationCap, 
-  BookOpen, 
-  PlusCircle, 
-  Newspaper, 
   CheckCircle2, 
-  LogOut, 
-  Key, 
-  ArrowRight,
-  Sparkles,
   Info,
-  Award,
-  Layers,
-  Users,
   Eye,
   EyeOff,
-  KeyRound
+  UserCheck,
+  ShieldAlert
 } from 'lucide-react';
-import { User, UserRole } from '../../types';
-import { isTeacherToanOrAdmin, findUserForLogin } from '../../utils/authUtils';
-import { StorageService } from '../../services/storageService';
+import { User } from '../../types';
+import { findUserForLogin } from '../../utils/authUtils';
 
 interface LoginPageProps {
   currentUser: User;
@@ -38,11 +27,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   currentUser,
   users,
   onLoginUser,
-  onNavigateToTab,
-  onOpenCreateExam,
-  onOpenCreateNews,
-  onOpenChangePassword
+  onNavigateToTab
 }) => {
+  // Login Form States
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -67,27 +54,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    // Use the users prop which is kept fresh by App.tsx's real-time listener
     const allUsers = users || [];
-
     const matched = findUserForLogin(allUsers, query);
 
     if (!matched) {
-      setErrorMessage('Mã định danh hoặc Email không chính xác! Vui lòng nhập đúng Mã học sinh (VD: HS-20269101 hoặc 20269101).');
+      setErrorMessage('Mã định danh hoặc Email không chính xác! Vui lòng nhập đúng Mã học sinh được cấp (VD: HS-20269101 hoặc 20269101).');
       return;
     }
 
     if (matched.status === 'locked') {
-      setErrorMessage('Tài khoản này đang bị tạm khóa. Vui lòng liên hệ Thầy Toàn / Quản trị viên!');
+      setErrorMessage('Tài khoản này đang bị tạm khóa. Vui lòng liên hệ Thầy Toàn / Quản trị viên phòng máy!');
       return;
     }
 
-    // Check PIN strictly: matches user.pin (or default 123456) or master key admin123
     const validPin = matched.pin || '123456';
     const isPinValid = (enteredPin === validPin || enteredPin === 'admin123');
 
     if (!isPinValid) {
-      setErrorMessage('Mật khẩu không chính xác! Vui lòng kiểm tra lại mật khẩu của bạn.');
+      setErrorMessage('Mật khẩu không chính xác! Vui lòng kiểm tra lại mật khẩu do Admin cấp.');
       return;
     }
 
@@ -99,10 +83,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto py-2">
-
-      {/* Main Login Box (Placed right at the top for immediate access) */}
+      {/* Main Auth Container */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
-        <div className="border-b border-slate-100 pb-4">
+        {/* Header */}
+        <div className="border-b border-slate-100 pb-5">
           <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100">
               <Lock className="w-5 h-5" />
@@ -110,7 +94,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <span>Đăng Nhập Tài Khoản Người Dùng</span>
           </h3>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Vui lòng nhập Mã tài khoản / Email cùng Mật khẩu để đăng nhập hoặc chuyển đổi sang tài khoản khác.
+            Nhập Mã định danh hoặc Email cá nhân cùng Mật khẩu do Admin / Thầy Toàn cấp để đăng nhập vào hệ thống.
           </p>
         </div>
 
@@ -133,7 +117,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <form onSubmit={handleManualLogin} className="lg:col-span-7 space-y-4">
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Mã tài khoản / Email / Tên đăng nhập
+                Mã tài khoản / Email được cấp <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -143,7 +127,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   type="text"
                   value={usernameInput}
                   onChange={(e) => setUsernameInput(e.target.value)}
-                  placeholder="Nhập mã định danh (VD: GV-TINHOC01, HS-2024...) hoặc email..."
+                  placeholder="Nhập mã định danh (VD: GV-TINHOC01, HS-20269101...) hoặc email..."
                   className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 transition-all font-medium"
                   required
                 />
@@ -153,7 +137,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Mật khẩu / Mã PIN
+                  Mật khẩu / Mã PIN <span className="text-rose-500">*</span>
                 </label>
                 <span className="text-[11px] text-slate-400">Mặc định: 123456</span>
               </div>
@@ -187,8 +171,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </label>
               <button
                 type="button"
-                onClick={() => alert('Vui lòng liên hệ Thầy Toàn hoặc Quản trị viên phòng Tin học nhà trường để được hỗ trợ cấp lại mật khẩu.')}
-                className="text-blue-600 hover:underline font-semibold"
+                onClick={() => alert('Vui lòng liên hệ Thầy Toàn hoặc Quản trị viên phòng Tin học nhà trường để được cấp lại mật khẩu.')}
+                className="text-blue-600 hover:underline font-semibold cursor-pointer"
               >
                 Quên mật khẩu?
               </button>
@@ -203,27 +187,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </button>
           </form>
 
-          {/* Right: Security & Privacy Guidance */}
+          {/* Right: Strict Admin Control Policy Banner */}
           <div className="lg:col-span-5 bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-blue-700" />
-              Quy định bảo mật tài khoản:
+              Quy định cấp phát tài khoản:
             </h4>
 
             <div className="space-y-3 text-xs text-slate-600">
-              <div className="p-3 bg-white rounded-xl border border-slate-200">
-                <span className="font-bold text-slate-800 block mb-1">Mã định danh cá nhân</span>
-                Mỗi học sinh và giáo viên được cấp một tài khoản riêng. Hãy giữ kín thông tin đăng nhập của bạn.
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900">
+                <span className="font-bold flex items-center gap-1.5 mb-1">
+                  <ShieldAlert className="w-4 h-4 text-amber-600" />
+                  <span>Tài khoản chỉ do Admin cấp</span>
+                </span>
+                Hệ thống tắt chức năng tự đăng ký tài khoản công khai. Tất cả tài khoản Học sinh và Giáo viên đều do Admin / Thầy Toàn khởi tạo và phân quyền trực tiếp.
               </div>
 
               <div className="p-3 bg-white rounded-xl border border-slate-200">
-                <span className="font-bold text-slate-800 block mb-1">Đăng xuất sau khi thi</span>
-                Khi sử dụng máy tính phòng máy chung của trường, luôn nhớ đăng xuất sau khi hoàn thành bài thi hoặc bài tập.
+                <span className="font-bold text-slate-800 block mb-1">Bảo mật định danh cá nhân</span>
+                Mỗi học sinh được cấp một Mã định danh chuẩn (VD: HS-20269101). Hãy bảo quản mật khẩu PIN và không chia sẻ cho người khác.
               </div>
 
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-blue-900">
-                <span className="font-bold block mb-1">Hỗ trợ kỹ thuật phòng máy</span>
-                Thầy Toàn - Phụ trách Tin học & Khảo thí THCS Ngô Quyền.
+                <span className="font-bold block mb-1">Hỗ trợ kỹ thuật & Khảo thí</span>
+                Thầy Phạm Nhật Toàn - Phụ trách Tin học THCS Ngô Quyền.
               </div>
             </div>
           </div>

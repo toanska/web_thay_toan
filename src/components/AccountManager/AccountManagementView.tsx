@@ -327,6 +327,8 @@ Bùi Thảo Nhi`
 
     onSaveUser(newOrUpdatedUser);
     setShowModal(false);
+    setToastMessage(editingUser ? `Đã cập nhật thông tin tài khoản ${newOrUpdatedUser.name}!` : `Đã khởi tạo tài khoản mới: ${newOrUpdatedUser.name} (${newOrUpdatedUser.code})!`);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Toggle Account Lock Status

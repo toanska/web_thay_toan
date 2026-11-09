@@ -56,6 +56,31 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+/**
+ * Sanitizes an object before writing to Firestore.
+ * Strips all `undefined` fields and converts non-serializable values,
+ * preventing 'Unsupported field value: undefined' errors in Firestore SDK.
+ */
+export function cleanForFirestore<T>(data: T): any {
+  if (data === null || data === undefined) return null;
+  if (Array.isArray(data)) {
+    return data
+      .filter(item => item !== undefined)
+      .map(item => cleanForFirestore(item));
+  }
+  if (typeof data === 'object') {
+    if (data instanceof Date) return data.toISOString();
+    const result: Record<string, any> = {};
+    for (const [key, val] of Object.entries(data)) {
+      if (val !== undefined) {
+        result[key] = cleanForFirestore(val);
+      }
+    }
+    return result;
+  }
+  return data;
+}
+
 // Memory cache for quick synchronous access if needed, 
 // though async is preferred for Firebase
 let currentUserCache: User | null = null;
@@ -126,11 +151,11 @@ export const StorageService = {
         if (usersSnapshot.empty) {
           console.log('Chưa có dữ liệu trên Firestore, đang tiến hành khởi tạo ban đầu...');
           await Promise.all([
-            ...initialData.users.map(u => setDoc(doc(db, 'users', u.id), u)),
-            ...initialData.questions.map(q => setDoc(doc(db, 'questions', q.id), q)),
-            ...initialData.exams.map(e => setDoc(doc(db, 'exams', e.id), e)),
-            ...initialData.news.map(n => setDoc(doc(db, 'news', n.id), n)),
-            ...initialData.materials.map(m => setDoc(doc(db, 'materials', m.id), m))
+            ...initialData.users.map(u => setDoc(doc(db, 'users', u.id), cleanForFirestore(u))),
+            ...initialData.questions.map(q => setDoc(doc(db, 'questions', q.id), cleanForFirestore(q))),
+            ...initialData.exams.map(e => setDoc(doc(db, 'exams', e.id), cleanForFirestore(e))),
+            ...initialData.news.map(n => setDoc(doc(db, 'news', n.id), cleanForFirestore(n))),
+            ...initialData.materials.map(m => setDoc(doc(db, 'materials', m.id), cleanForFirestore(m)))
           ]);
           console.log('Khởi tạo dữ liệu ban đầu lên Firestore thành công!');
         }
@@ -161,7 +186,8 @@ export const StorageService = {
 
   async saveUser(user: User): Promise<User> {
     try {
-      await setDoc(doc(db, 'users', user.id), user);
+      const sanitized = cleanForFirestore(user);
+      await setDoc(doc(db, 'users', user.id), sanitized);
       return user;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
@@ -194,7 +220,8 @@ export const StorageService = {
 
   async saveQuestion(question: Question): Promise<Question> {
     try {
-      await setDoc(doc(db, 'questions', question.id), question);
+      const sanitized = cleanForFirestore(question);
+      await setDoc(doc(db, 'questions', question.id), sanitized);
       return question;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `questions/${question.id}`);
@@ -223,7 +250,8 @@ export const StorageService = {
 
   async saveExam(exam: Exam): Promise<Exam> {
     try {
-      await setDoc(doc(db, 'exams', exam.id), exam);
+      const sanitized = cleanForFirestore(exam);
+      await setDoc(doc(db, 'exams', exam.id), sanitized);
       return exam;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `exams/${exam.id}`);
@@ -252,7 +280,8 @@ export const StorageService = {
 
   async saveAttempt(attempt: ExamAttempt): Promise<ExamAttempt> {
     try {
-      await setDoc(doc(db, 'attempts', attempt.id), attempt);
+      const sanitized = cleanForFirestore(attempt);
+      await setDoc(doc(db, 'attempts', attempt.id), sanitized);
       return attempt;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `attempts/${attempt.id}`);
@@ -281,7 +310,8 @@ export const StorageService = {
 
   async saveNews(article: NewsArticle): Promise<NewsArticle> {
     try {
-      await setDoc(doc(db, 'news', article.id), article);
+      const sanitized = cleanForFirestore(article);
+      await setDoc(doc(db, 'news', article.id), sanitized);
       return article;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `news/${article.id}`);
@@ -310,7 +340,8 @@ export const StorageService = {
 
   async saveMaterial(material: LessonMaterial): Promise<LessonMaterial> {
     try {
-      await setDoc(doc(db, 'materials', material.id), material);
+      const sanitized = cleanForFirestore(material);
+      await setDoc(doc(db, 'materials', material.id), sanitized);
       return material;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `materials/${material.id}`);
@@ -410,12 +441,75 @@ export const StorageService = {
     console.warn('Reset all data not supported for Firebase directly through this method.');
   },
   
-  exportBackup() {
-    return JSON.stringify({ message: "Use Firebase Console for backups" });
+  async exportBackup(): Promise<string> {
+    try {
+      const [users, questions, exams, news, materials, attempts] = await Promise.all([
+        this.getUsers(),
+        this.getQuestions(),
+        this.getExams(),
+        this.getNews(),
+        this.getMaterials(),
+        this.getAttempts()
+      ]);
+      return JSON.stringify({
+        version: '2.0',
+        exportedAt: new Date().toISOString(),
+        users,
+        questions,
+        exams,
+        news,
+        materials,
+        attempts
+      }, null, 2);
+    } catch (e) {
+      console.error('Error exporting backup:', e);
+      return JSON.stringify({ error: 'Failed to export' });
+    }
   },
   
-  importBackup(json?: string, verbose = true) {
-    return false;
+  async importBackup(json?: string, verbose = true): Promise<boolean> {
+    if (!json || !json.trim()) return false;
+    try {
+      const parsed = JSON.parse(json);
+      const promises: Promise<any>[] = [];
+
+      if (Array.isArray(parsed.users)) {
+        parsed.users.forEach((u: User) => {
+          if (u.id) promises.push(setDoc(doc(db, 'users', u.id), cleanForFirestore(u)));
+        });
+      }
+      if (Array.isArray(parsed.questions)) {
+        parsed.questions.forEach((q: Question) => {
+          if (q.id) promises.push(setDoc(doc(db, 'questions', q.id), cleanForFirestore(q)));
+        });
+      }
+      if (Array.isArray(parsed.exams)) {
+        parsed.exams.forEach((e: Exam) => {
+          if (e.id) promises.push(setDoc(doc(db, 'exams', e.id), cleanForFirestore(e)));
+        });
+      }
+      if (Array.isArray(parsed.news)) {
+        parsed.news.forEach((n: NewsArticle) => {
+          if (n.id) promises.push(setDoc(doc(db, 'news', n.id), cleanForFirestore(n)));
+        });
+      }
+      if (Array.isArray(parsed.materials)) {
+        parsed.materials.forEach((m: LessonMaterial) => {
+          if (m.id) promises.push(setDoc(doc(db, 'materials', m.id), cleanForFirestore(m)));
+        });
+      }
+      if (Array.isArray(parsed.attempts)) {
+        parsed.attempts.forEach((a: ExamAttempt) => {
+          if (a.id) promises.push(setDoc(doc(db, 'attempts', a.id), cleanForFirestore(a)));
+        });
+      }
+
+      await Promise.all(promises);
+      return true;
+    } catch (e) {
+      console.error('Error importing backup:', e);
+      return false;
+    }
   },
 
   // Legacy stubs for CloudflareService compatibility

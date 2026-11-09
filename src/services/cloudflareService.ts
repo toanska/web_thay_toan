@@ -312,7 +312,7 @@ export const CloudflareService = {
         wasUpdated = mergeResult.updated;
         newAttempts = mergeResult.newAttemptsCount;
       } else {
-        wasUpdated = StorageService.importBackup(JSON.stringify(remoteData), false);
+        wasUpdated = await StorageService.importBackup(JSON.stringify(remoteData), false);
       }
 
       this.saveConfig({

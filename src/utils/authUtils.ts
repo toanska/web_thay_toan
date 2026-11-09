@@ -79,3 +79,31 @@ export function findUserForLogin(users: User[], inputQuery: string): User | unde
     return false;
   });
 }
+
+export function getClassCodeDigits(className?: string, grade?: number): string {
+  if (!className) {
+    return `${grade || 9}1`;
+  }
+  const clean = className.trim().toUpperCase();
+  const digitsOnly = clean.replace(/[^0-9]/g, '');
+  if (digitsOnly.length >= 2) {
+    return digitsOnly;
+  } else if (digitsOnly.length === 1) {
+    const letterMatch = clean.match(/[A-Z]/);
+    let sec = '1';
+    if (letterMatch) {
+      const charCode = letterMatch[0].charCodeAt(0) - 64; // A=1, B=2, C=3...
+      sec = String(Math.max(1, Math.min(9, charCode)));
+    }
+    return `${digitsOnly}${sec}`;
+  } else {
+    return `${grade || 9}1`;
+  }
+}
+
+export function formatStudentCode(className?: string, grade?: number, sttIndex: number = 1, year: number = 2026): string {
+  const classDigits = getClassCodeDigits(className, grade);
+  const sttStr = String(sttIndex).padStart(2, '0');
+  return `HS-${year}${classDigits}${sttStr}`;
+}
+

@@ -8,11 +8,11 @@ import {
   AlertCircle, 
   Eye, 
   EyeOff, 
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { User } from '../../types';
 import { findUserForLogin } from '../../utils/authUtils';
-import { StorageService } from '../../services/storageService';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -55,13 +55,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Use the users prop which is kept fresh by App.tsx's real-time listener
     const allUsers = users || [];
-
     const matched = findUserForLogin(allUsers, query);
 
     if (!matched) {
-      setErrorMessage('Mã định danh hoặc Email không chính xác! Vui lòng nhập đúng Mã học sinh (VD: HS-20269101 hoặc 20269101).');
+      setErrorMessage('Mã định danh hoặc Email không chính xác! Vui lòng nhập đúng Mã học sinh do Admin cấp (VD: HS-20269101 hoặc 20269101).');
       return;
     }
 
@@ -70,12 +68,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Check PIN strictly (user.pin, default 123456, or admin master key)
     const validPin = matched.pin || '123456';
     const isPinValid = (enteredPin === validPin || enteredPin === 'admin123');
 
     if (!isPinValid) {
-      setErrorMessage('Mật khẩu không chính xác! Vui lòng kiểm tra lại mật khẩu của bạn.');
+      setErrorMessage('Mật khẩu không chính xác! Vui lòng kiểm tra lại mật khẩu do Admin cấp.');
       return;
     }
 
@@ -104,7 +101,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-base sm:text-lg text-white font-serif">
-                Đăng Nhập Tài Khoản Khác
+                Đăng Nhập Tài Khoản Người Dùng
               </h3>
               <p className="text-xs text-blue-200">
                 Hệ thống Quản trị & Khảo thí - THCS Ngô Quyền
@@ -122,22 +119,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         </div>
 
         {/* Current Active User Banner */}
-        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex items-center justify-between text-xs">
+        <div className="bg-slate-50 px-6 py-2.5 border-b border-slate-200 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
             <span className="text-slate-500">Đang đăng nhập:</span>
             <img src={currentUser.avatar} alt={currentUser.name} className="w-6 h-6 rounded-full object-cover border border-slate-300" />
             <span className="font-bold text-slate-800">{currentUser.name}</span>
-            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-              currentUser.role === 'student' ? 'bg-sky-100 text-sky-800' :
-              currentUser.role === 'teacher' ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'
-            }`}>
-              {currentUser.role === 'student' ? 'Học sinh' : currentUser.role === 'teacher' ? 'Giáo viên' : 'Admin'}
-            </span>
           </div>
           <span className="font-mono text-slate-500 text-[11px]">{currentUser.code}</span>
         </div>
 
-        {/* Body Content: Pure Login Form */}
+        {/* Body Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
           {errorMessage && (
             <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 font-medium flex items-center gap-2 animate-in fade-in">
@@ -166,7 +157,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   type="text"
                   value={usernameInput}
                   onChange={(e) => setUsernameInput(e.target.value)}
-                  placeholder="VD: GV-TINHOC01, admin@... hoặc mã học sinh"
+                  placeholder="VD: GV-TINHOC01, HS-20269101... hoặc email"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 transition-all font-medium"
                   autoFocus
                   required
@@ -204,14 +195,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-              <label className="flex items-center space-x-2 cursor-pointer select-none">
-                <input type="checkbox" defaultChecked className="rounded text-blue-600" />
-                <span>Ghi nhớ phiên đăng nhập</span>
-              </label>
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs leading-relaxed">
+              <div className="font-bold flex items-center gap-1 mb-0.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                <span>Tài khoản chỉ do Admin cấp</span>
+              </div>
+              Hệ thống tắt chức năng tự đăng ký. Học sinh & Giáo viên dùng Mã tài khoản do Admin / Thầy Toàn cấp để đăng nhập.
             </div>
 
-            <div className="pt-2 flex flex-col gap-3">
+            <div className="pt-1 flex flex-col gap-3">
               <button
                 type="submit"
                 className="w-full py-3 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -219,33 +211,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <LogIn className="w-4 h-4" />
                 <span>Xác Nhận Đăng Nhập</span>
               </button>
-
-              {/* Developer / Admin Seeding Fallback */}
-              {(users.length <= 1 || (currentUser.role === 'admin' || currentUser.role === 'teacher')) && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const { INITIAL_USERS, INITIAL_QUESTIONS, INITIAL_EXAMS, INITIAL_NEWS, INITIAL_MATERIALS } = await import('../../data/mockData');
-                    try {
-                      alert('Đang khởi tạo dữ liệu lên Đám mây Firebase... Vui lòng đợi.');
-                      await StorageService.initialize({
-                        users: INITIAL_USERS,
-                        questions: INITIAL_QUESTIONS,
-                        exams: INITIAL_EXAMS,
-                        news: INITIAL_NEWS,
-                        materials: INITIAL_MATERIALS
-                      });
-                      alert('Khởi tạo thành công! Dữ liệu đã được đồng bộ.');
-                      window.location.reload();
-                    } catch (err) {
-                      alert('Lỗi khởi tạo: ' + (err instanceof Error ? err.message : String(err)));
-                    }
-                  }}
-                  className="w-full py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
-                >
-                  Khởi tạo dữ liệu hệ thống (Dành cho Admin)
-                </button>
-              )}
             </div>
           </form>
         </div>

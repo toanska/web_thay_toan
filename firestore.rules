@@ -64,5 +64,11 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if true;
     }
+
+    // System Config & Metadata
+    match /system_config/{configId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
   }
 }

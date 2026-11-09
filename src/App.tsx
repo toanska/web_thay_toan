@@ -46,7 +46,7 @@ import {
 export function App() {
   // State Initialization
   const [currentUser, setCurrentUser] = useState<User>(() => StorageService.getCurrentUser());
-  const [availableUsers, setAvailableUsers] = useState<User[]>(INITIAL_USERS);
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -232,35 +232,53 @@ export function App() {
     reloadAllData();
   };
 
-  const handleExportData = () => {
-    const json = StorageService.exportBackup();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `backup_thcs_nguyendu_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportData = async () => {
+    try {
+      const json = await StorageService.exportBackup();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_tinhoc_thaytoan_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Lỗi xuất dữ liệu: ' + (err?.message || String(err)));
+    }
   };
 
-  const handleImportData = (json: string) => {
-    const ok = StorageService.importBackup();
-    if (ok) {
-      handleResetData();
-      alert('Nhập dữ liệu thành công!');
-    } else {
-      alert('Chức năng nhập dữ liệu đang được cập nhật cho phiên bản Firebase.');
+  const handleImportData = async (json: string) => {
+    try {
+      const ok = await StorageService.importBackup(json);
+      if (ok) {
+        await reloadAllData();
+        alert('Nhập dữ liệu sao lưu thành công lên hệ thống đám mây!');
+      } else {
+        alert('File dữ liệu không hợp lệ hoặc không đúng định dạng.');
+      }
+    } catch (err: any) {
+      alert('Lỗi nhập dữ liệu: ' + (err?.message || String(err)));
     }
   };
 
   // --- Materials handlers ---
   const handleSaveMaterial = async (material: LessonMaterial) => {
+    setMaterials(prev => {
+      const idx = prev.findIndex(m => m.id === material.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = material;
+        return copy;
+      }
+      return [material, ...prev];
+    });
     await StorageService.saveMaterial(material);
     setEditingNews(undefined);
   };
 
   const handleDeleteMaterial = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa tài liệu này?')) {
+      setMaterials(prev => prev.filter(m => m.id !== id));
       await StorageService.deleteMaterial(id);
     }
   };
@@ -275,12 +293,22 @@ export function App() {
 
   // --- News handlers ---
   const handleSaveNews = async (article: NewsArticle) => {
+    setNews(prev => {
+      const idx = prev.findIndex(n => n.id === article.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = article;
+        return copy;
+      }
+      return [article, ...prev];
+    });
     await StorageService.saveNews(article);
     setEditingNews(undefined);
   };
 
   const handleDeleteNews = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa bài viết này?')) {
+      setNews(prev => prev.filter(n => n.id !== id));
       await StorageService.deleteNews(id);
     }
   };
@@ -368,24 +396,49 @@ export function App() {
 
   // --- User handlers ---
   const handleSaveUser = async (user: User) => {
-    await StorageService.saveUser(user);
-    if (currentUser.id === user.id) {
-      setCurrentUser(user);
+    try {
+      setAvailableUsers(prev => {
+        const idx = prev.findIndex(u => u.id === user.id);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = user;
+          return updated;
+        }
+        return [user, ...prev];
+      });
+      await StorageService.saveUser(user);
+      if (currentUser.id === user.id) {
+        setCurrentUser(user);
+      }
+    } catch (err) {
+      console.error('Error saving user:', err);
     }
   };
 
   const handleSaveUsersBatch = async (newUsers: User[]) => {
-    await Promise.all(newUsers.map(u => StorageService.saveUser(u)));
+    try {
+      setAvailableUsers(prev => {
+        const newMap = new Map(newUsers.map(u => [u.id, u]));
+        const retained = prev.filter(u => !newMap.has(u.id));
+        return [...newUsers, ...retained];
+      });
+      await Promise.all(newUsers.map(u => StorageService.saveUser(u)));
+    } catch (err) {
+      console.error('Error saving batch users:', err);
+    }
   };
 
   const handleDeleteUser = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa người dùng này?')) {
+      setAvailableUsers(prev => prev.filter(u => u.id !== id));
       await StorageService.deleteUser(id);
     }
   };
 
   const handleDeleteUsersBatch = async (ids: string[]) => {
     if (confirm(`Bạn có chắc chắn muốn xóa ${ids.length} người dùng đã chọn?`)) {
+      const set = new Set(ids);
+      setAvailableUsers(prev => prev.filter(u => !set.has(u.id)));
       await Promise.all(ids.map(id => StorageService.deleteUser(id)));
     }
   };
@@ -399,12 +452,22 @@ export function App() {
 
   // --- Question Bank handlers ---
   const handleSaveQuestion = async (question: Question) => {
+    setQuestions(prev => {
+      const idx = prev.findIndex(q => q.id === question.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = question;
+        return copy;
+      }
+      return [question, ...prev];
+    });
     await StorageService.saveQuestion(question);
     setEditingQuestion(undefined);
   };
 
   const handleDeleteQuestion = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) {
+      setQuestions(prev => prev.filter(q => q.id !== id));
       await StorageService.deleteQuestion(id);
     }
   };
@@ -416,16 +479,27 @@ export function App() {
       code: `${q.code}-COPY`,
       createdAt: new Date().toISOString().split('T')[0]
     };
+    setQuestions(prev => [duplicated, ...prev]);
     await StorageService.saveQuestion(duplicated);
   };
 
   const handleSaveAIBatchQuestions = async (newQuestions: Question[]) => {
+    setQuestions(prev => [...newQuestions, ...prev]);
     await Promise.all(newQuestions.map(q => StorageService.saveQuestion(q)));
     setIsAIGeneratorOpen(false);
   };
 
   // --- Exam handlers ---
   const handleSaveExam = async (exam: Exam) => {
+    setExams(prev => {
+      const idx = prev.findIndex(e => e.id === exam.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = exam;
+        return copy;
+      }
+      return [exam, ...prev];
+    });
     if (exam.questions && exam.questions.length > 0) {
       await Promise.all(exam.questions.map(q => StorageService.saveQuestion(q)));
     }
@@ -435,6 +509,7 @@ export function App() {
 
   const handleDeleteExam = async (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa đề thi này?')) {
+      setExams(prev => prev.filter(e => e.id !== id));
       await StorageService.deleteExam(id);
     }
   };
@@ -455,10 +530,17 @@ export function App() {
   };
 
   const handleDeleteAttempt = async (id: string) => {
-    // Implement deleteAttempt in StorageService if needed
+    if (confirm('Bạn có chắc chắn muốn xóa bài thi này?')) {
+      setAttempts(prev => prev.filter(a => a.id !== id));
+      await StorageService.deleteAttempt(id);
+    }
   };
 
   const handleFinishExamAttempt = async (attempt: ExamAttempt) => {
+    setAttempts(prev => {
+      const filtered = prev.filter(a => a.id !== attempt.id);
+      return [attempt, ...filtered];
+    });
     await StorageService.saveAttempt(attempt);
     setActiveExam(null);
     setViewingAttempt(attempt);
