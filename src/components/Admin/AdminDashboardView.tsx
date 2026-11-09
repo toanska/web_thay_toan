@@ -529,7 +529,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           </span>
                         )}
                       </div>
-                      <span>{art.date}</span>
+                      <span>{art.publishedAt}</span>
                     </div>
                     <h4 className="font-bold text-sm text-slate-900 line-clamp-2">{art.title}</h4>
                     <p className="text-xs text-slate-500 line-clamp-3">{art.summary}</p>
@@ -697,7 +697,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           <span>Từ chối</span>
                         </button>
                       )}
-                      <span className="font-bold text-teal-700 ml-1">{mat.downloads || 0} tải</span>
+                      <span className="font-bold text-teal-700 ml-1">{mat.downloadCount || 0} tải</span>
                     </div>
                   </div>
                 </div>
@@ -966,7 +966,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       `"${att.studentClass}"`,
                       `"${att.examTitle.replace(/"/g, '""')}"`,
                       att.score.toFixed(1),
-                      att.correctCount,
+                      att.correctAnswersCount || 0,
                       att.totalQuestions,
                       att.durationSeconds,
                       att.tabSwitchCount || 0,
@@ -1092,7 +1092,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           </span>
                         </td>
                         <td className="px-4 py-3 font-mono text-slate-600">
-                          {att.correctCount} / {att.totalQuestions}
+                          {att.correctAnswersCount || 0} / {att.totalQuestions}
                         </td>
                         <td className="px-4 py-3 text-slate-500">
                           {Math.floor(att.durationSeconds / 60)} phút {att.durationSeconds % 60}s
@@ -1255,7 +1255,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 {q.options && q.options.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {q.options.map((opt, oIdx) => {
-                      const isCorrect = Array.isArray(q.correctAnswers) && q.correctAnswers.includes(oIdx);
+                      const isCorrect = Array.isArray(q.correctAnswers) && (q.correctAnswers as any[]).includes(oIdx);
                       return (
                         <div 
                           key={oIdx}
@@ -1288,8 +1288,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         isOpen={!!rejectingItem}
         onClose={() => setRejectingItem(null)}
         itemTitle={rejectingItem?.title || ''}
-        itemType={rejectingItem?.type || 'bài viết'}
-        onConfirmReject={(reason) => {
+        itemType={(((rejectingItem?.type as string) === 'đề kiểm tra' ? 'đề thi' : rejectingItem?.type) as any) || 'bài viết'}
+        onConfirm={(reason) => {
           if (!rejectingItem) return;
           if (rejectingItem.category === 'news' && onRejectNews) {
             onRejectNews(rejectingItem.id, reason);

@@ -316,7 +316,7 @@ export const QuestionBankManager: React.FC<QuestionBankManagerProps> = ({
                   {q.options && q.options.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
                       {q.options.map((opt, optIdx) => {
-                        const isCorrect = q.correctAnswers.includes(optIdx);
+                        const isCorrect = (q.correctAnswers as any[]).includes(optIdx);
                         const letter = String.fromCharCode(65 + optIdx);
                         return (
                           <div

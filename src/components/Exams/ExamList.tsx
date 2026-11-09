@@ -652,7 +652,7 @@ export const ExamList: React.FC<ExamListProps> = ({
       {rejectExamTarget && (
         <RejectModal
           isOpen={!!rejectExamTarget}
-          itemType="đề kiểm tra"
+          itemType="đề thi"
           itemTitle={rejectExamTarget.title}
           onConfirm={(reason) => {
             if (onRejectExam) {

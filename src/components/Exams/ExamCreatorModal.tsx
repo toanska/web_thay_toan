@@ -1259,7 +1259,7 @@ Lời giải: Router hoạt động ở tầng mạng, có bảng định tuyế
                       {q.options && q.options.length > 0 && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                           {q.options.map((opt, optIdx) => {
-                            const isCorrect = Array.isArray(q.correctAnswers) && q.correctAnswers.includes(optIdx);
+                            const isCorrect = Array.isArray(q.correctAnswers) && (q.correctAnswers as any[]).includes(optIdx);
                             const optLabel = String.fromCharCode(65 + optIdx);
                             return (
                               <div

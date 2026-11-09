@@ -322,7 +322,7 @@ export const AIQuestionGeneratorModal: React.FC<AIQuestionGeneratorModalProps> =
                     {q.options && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-[11px]">
                         {q.options.map((opt, oIdx) => {
-                          const isCorrect = q.correctAnswers.includes(oIdx);
+                          const isCorrect = (q.correctAnswers as any[]).includes(oIdx);
                           const letter = String.fromCharCode(65 + oIdx);
                           return (
                             <div

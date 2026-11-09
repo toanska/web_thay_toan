@@ -213,7 +213,10 @@ export interface CloudflareConfig {
 export type NavigationTab = 
   | 'news' 
   | 'materials'
+  | 'lessons'
+  | 'teacher_lessons'
   | 'exams' 
+  | 'question_bank'
   | 'score_lookup' 
   | 'admin_portal'
   | 'students'

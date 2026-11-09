@@ -174,7 +174,7 @@ export const MaterialDetailModal: React.FC<MaterialDetailModalProps> = ({
               )}
 
               {/* Image Frame */}
-              {(material.fileUrl.startsWith('data:image/') || material.fileFormat === 'jpg' || material.fileFormat === 'png') && (
+              {(material.fileUrl.startsWith('data:image/') || (material.fileFormat as string) === 'jpg' || (material.fileFormat as string) === 'png') && (
                 <div className="p-3 bg-slate-950 rounded-xl text-center overflow-auto max-h-[550px]">
                   <img 
                     src={material.fileUrl} 

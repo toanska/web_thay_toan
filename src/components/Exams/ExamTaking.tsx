@@ -172,13 +172,13 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
       let awarded = 0;
 
       if (q.type === 'multiple_choice' || q.type === 'true_false') {
-        if (studentAns !== undefined && q.correctAnswers.includes(studentAns)) {
+        if (studentAns !== undefined && (q.correctAnswers as any[]).includes(studentAns)) {
           isCorrect = true;
           awarded = maxPts;
         }
       } else if (q.type === 'multi_select') {
         if (Array.isArray(studentAns)) {
-          const correctSet = new Set(q.correctAnswers);
+          const correctSet = new Set(q.correctAnswers as any[]);
           const studentSet = new Set(studentAns);
           if (correctSet.size === studentSet.size && [...studentSet].every(val => correctSet.has(val))) {
             isCorrect = true;
@@ -188,7 +188,7 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
       } else if (q.type === 'fill_in') {
         if (studentAns !== undefined) {
           const cleanStudent = String(studentAns).trim().toLowerCase();
-          const cleanCorrect = q.correctAnswers.map(c => String(c).trim().toLowerCase());
+          const cleanCorrect = (q.correctAnswers as any[]).map(c => String(c).trim().toLowerCase());
           if (cleanCorrect.includes(cleanStudent)) {
             isCorrect = true;
             awarded = maxPts;

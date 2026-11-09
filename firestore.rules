@@ -1,74 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // -------------------------------------------------------------------------
-    // Helper Functions
-    // -------------------------------------------------------------------------
-    function isSignedIn() { return request.auth != null; }
-    function incoming() { return request.resource.data; }
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
-
-    // -------------------------------------------------------------------------
-    // Global Safety Net
-    // -------------------------------------------------------------------------
     match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // -------------------------------------------------------------------------
-    // Collection Match Blocks
-    // Cho phép đọc/ghi công khai hoặc có xác thực để hệ thống đồng bộ tức thời
-    // không bị kẹt vì lỗi permission denied.
-    // -------------------------------------------------------------------------
-
-    // Users
-    match /users/{userId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if true;
-    }
-
-    // Questions
-    match /questions/{questionId} {
-      allow read: if true;
-      allow create, update, delete: if true;
-    }
-
-    // Exams
-    match /exams/{examId} {
-      allow read: if true;
-      allow create, update, delete: if true;
-    }
-
-    // Attempts
-    match /attempts/{attemptId} {
-      allow read: if true;
-      allow create, update, delete: if true;
-    }
-
-    // News
-    match /news/{newsId} {
-      allow read: if true;
-      allow create, update, delete: if true;
-    }
-
-    // Materials
-    match /materials/{materialId} {
-      allow read: if true;
-      allow create, update, delete: if true;
-    }
-
-    // Notifications
-    match /notifications/{notifId} {
-      allow read: if true;
-      allow create, update, delete: if true;
-    }
-
-    // System Config & Metadata
-    match /system_config/{configId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read, write: if true;
     }
   }
 }

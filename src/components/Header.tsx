@@ -11,6 +11,7 @@ import {
   RotateCcw, 
   Download, 
   Upload, 
+  Play,
   Menu, 
   X,
   Award,
@@ -168,7 +169,8 @@ export const Header: React.FC<HeaderProps> = ({
   const allNavItems: { id: NavigationTab; label: string; icon: any; color: string; badge?: string }[] = [
     { id: 'exams', label: 'Bài kiểm tra trực tuyến', icon: FileText, color: 'text-indigo-600', badge: 'Hot' },
     { id: 'news', label: 'Tin tức & Thông báo', icon: Newspaper, color: 'text-sky-600' },
-    { id: 'materials', label: 'Bài giảng & Giáo án', icon: BookOpen, color: 'text-teal-600', badge: 'Mới' },
+    { id: 'lessons', label: 'Kho Thư Viện Bài Giảng', icon: BookOpen, color: 'text-teal-600', badge: 'Cloud' },
+    { id: 'teacher_lessons', label: 'Upload Bài Giảng Cloud', icon: Upload, color: 'text-emerald-600' },
     { id: 'score_lookup', label: 'Tra cứu điểm', icon: Search, color: 'text-amber-600' },
     { id: 'admin_portal', label: 'Trang Quản Trị', icon: ShieldCheck, color: 'text-rose-600', badge: 'VIP' },
     { id: 'students', label: 'Quản Lý Tài Khoản', icon: Users, color: 'text-emerald-600' },
@@ -176,7 +178,7 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   const navItems = allNavItems.filter(item => {
-    if (item.id === 'admin_portal' || item.id === 'students') {
+    if (item.id === 'admin_portal' || item.id === 'students' || item.id === 'teacher_lessons') {
       return isAuthorizedToManageStudents;
     }
     if (item.id === 'reports' && (currentUser.role === 'guest' || currentUser.role === 'student')) {

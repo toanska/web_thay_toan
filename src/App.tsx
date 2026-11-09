@@ -20,8 +20,11 @@ import { SessionConflictModal } from './components/Auth/SessionConflictModal';
 import { AccountManagementView } from './components/AccountManager/AccountManagementView';
 import { AdminDashboardView } from './components/Admin/AdminDashboardView';
 import { MaterialListView } from './components/Materials/MaterialListView';
+import { StudentLessonCatalog } from './components/student/StudentLessonCatalog';
+import { TeacherLessonUploader } from './components/teacher/TeacherLessonUploader';
 import { CloudflareSyncModal } from './components/CloudflareSync/CloudflareSyncModal';
 import { isTeacherToanOrAdmin } from './utils/authUtils';
+import { updateDynamicMetadata } from './utils/seoHelper';
 
 import { StorageService } from './services/storageService';
 import { CloudflareService } from './services/cloudflareService';
@@ -314,7 +317,37 @@ export function App() {
   };
 
   const handleLikeNews = async (id: string) => {
-    // Implement for Firebase
+    const article = news.find(n => n.id === id);
+    if (!article) return;
+    const updated = {
+      ...article,
+      likes: (article.likes || 0) + 1
+    };
+    await handleSaveNews(updated);
+    if (selectedNews && selectedNews.id === id) {
+      setSelectedNews(updated);
+    }
+  };
+
+  const handleAddComment = async (articleId: string, content: string) => {
+    const article = news.find(n => n.id === articleId);
+    if (!article) return;
+    const newComment = {
+      id: 'c_' + Date.now(),
+      authorName: currentUser.name,
+      authorRole: currentUser.role,
+      authorAvatar: currentUser.avatar,
+      content,
+      createdAt: new Date().toISOString()
+    };
+    const updated = {
+      ...article,
+      comments: [newComment, ...(article.comments || [])]
+    };
+    await handleSaveNews(updated);
+    if (selectedNews && selectedNews.id === articleId) {
+      setSelectedNews(updated);
+    }
   };
 
   // --- Content Moderation Handlers ---
@@ -621,6 +654,29 @@ export function App() {
           />
         )}
 
+        {/* Thư viện bài giảng cloud cho học sinh & khách */}
+        {activeTab === 'lessons' && (
+          <StudentLessonCatalog
+            initialLessonId={typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('lesson') : null}
+            onTakeExam={(examId) => {
+              const foundExam = exams.find(e => e.id === examId);
+              if (foundExam) {
+                handleStartExam(foundExam);
+              } else {
+                alert(`Không tìm thấy đề kiểm tra với mã: ${examId}`);
+              }
+            }}
+          />
+        )}
+
+        {/* Phân hệ giáo viên upload bài giảng cloud */}
+        {activeTab === 'teacher_lessons' && (
+          <TeacherLessonUploader
+            onClose={() => setActiveTab('lessons')}
+            onLessonCreated={() => setActiveTab('lessons')}
+          />
+        )}
+
         {/* CHỨC NĂNG 2: Danh Sách Bài Kiểm Tra & Làm Bài Trực Tuyến */}
         {activeTab === 'exams' && (
           <ExamList
@@ -830,6 +886,8 @@ export function App() {
           article={selectedNews}
           currentUser={currentUser}
           onClose={() => setSelectedNews(null)}
+          onLike={handleLikeNews}
+          onAddComment={handleAddComment}
         />
       )}
 
@@ -915,9 +973,10 @@ export function App() {
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
         currentUser={currentUser}
-        onPasswordChanged={(updatedUser) => {
+        onPasswordChanged={async (updatedUser) => {
           setCurrentUser(updatedUser);
-          setAvailableUsers(StorageService.getUsers());
+          const usersList = await StorageService.getUsers();
+          setAvailableUsers(usersList);
         }}
       />
 
@@ -928,7 +987,11 @@ export function App() {
           userName={sessionConflictData.userName}
           userCode={sessionConflictData.userCode}
           newDevice={sessionConflictData.newDevice}
-          onAcknowledge={() => {
+          onClose={() => {
+            setSessionConflictData(null);
+            setIsLoginModalOpen(true);
+          }}
+          onReLogin={() => {
             setSessionConflictData(null);
             setIsLoginModalOpen(true);
           }}
