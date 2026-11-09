@@ -33,7 +33,7 @@ export interface Lesson {
   sourceType: 'firebase_file' | 'external_link';
   fileUrl: string;
   storagePath: string | null;
-  fileType: 'pdf' | 'pptx' | 'docx' | 'mp4' | 'youtube' | 'drive' | 'canva' | 'scratch' | 'code';
+  fileType: 'pdf' | 'pptx' | 'docx' | 'xlsx' | 'mp4' | 'youtube' | 'drive' | 'canva' | 'scratch' | 'code';
   fileSize: number;
   visibility: 'public' | 'unlisted' | 'private';
   allowDownload: boolean;
@@ -231,26 +231,38 @@ export async function incrementLessonView(lessonId: string): Promise<void> {
 /**
  * Get Smart Embed URL for iframe display with fallback support.
  */
-export function getSmartEmbedUrl(fileUrl: string, fileType: string): string {
+export function getSmartEmbedUrl(fileUrl: string, fileType: string, useProxy: boolean = false): string {
   if (!fileUrl) return '';
 
-  if (fileType === 'youtube') {
+  const isDriveLink = fileUrl.includes('drive.google.com');
+
+  if (fileType === 'youtube' || fileUrl.includes('youtube.com') || fileUrl.includes('youtu.be')) {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = fileUrl.match(regExp);
-    return match && match[2].length === 11 ? `https://www.youtube.com/embed/${match[2]}` : fileUrl;
+    if (match && match[2].length === 11) return `https://www.youtube.com/embed/${match[2]}`;
   }
 
-  if (fileType === 'drive') {
-    // Convert drive view to embed
-    return fileUrl.replace('/view?usp=sharing', '/preview').replace('/view', '/preview');
+  if (fileType === 'drive' || isDriveLink) {
+    let fileId = '';
+    if (fileUrl.includes('/file/d/')) {
+      fileId = fileUrl.split('/file/d/')[1].split('/')[0];
+    } else if (fileUrl.includes('?id=')) {
+      fileId = new URL(fileUrl).searchParams.get('id') || '';
+    }
+
+    if (fileId) {
+      if (useProxy) {
+        // Mode 2: Google Docs Viewer Proxy (Stable for multi-account)
+        return `https://docs.google.com/viewer?srcid=${fileId}&pid=explorer&efh=false&a=v&chrome=false&embedded=true`;
+      }
+      // Mode 1: Standard Drive Preview (Better for mobile/scaling)
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
   }
 
-  if (fileType === 'canva') {
-    return fileUrl;
-  }
+  if (fileType === 'canva') return fileUrl;
 
-  if (fileType === 'pptx' || fileType === 'docx') {
-    // Wrap through Microsoft Office Viewer or Google Docs Viewer
+  if (fileType === 'pptx' || fileType === 'docx' || fileType === 'xlsx') {
     return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
   }
 

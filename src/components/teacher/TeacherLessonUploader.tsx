@@ -11,6 +11,7 @@ import {
   Eye, 
   BookOpen, 
   Shield, 
+  ShieldCheck,
   Download, 
   Sparkles, 
   Trash2, 
@@ -36,7 +37,7 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
   const [chapter, setChapter] = useState(lessonToEdit?.chapter || 'Chủ đề 1: Máy tính và cộng đồng');
   const [summary, setSummary] = useState(lessonToEdit?.summary || '');
   
-  const [sourceType, setSourceType] = useState<'firebase_file' | 'external_link'>(lessonToEdit?.sourceType || 'firebase_file');
+  const [sourceType, setSourceType] = useState<'firebase_file' | 'external_link' | 'google_drive'>(lessonToEdit?.sourceType === 'external_link' && lessonToEdit.fileUrl.includes('drive.google.com') ? 'google_drive' : (lessonToEdit?.sourceType || 'firebase_file'));
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [externalUrl, setExternalUrl] = useState(lessonToEdit?.sourceType === 'external_link' ? lessonToEdit.fileUrl : '');
   const [fileType, setFileType] = useState<Lesson['fileType']>(lessonToEdit?.fileType || 'pdf');
@@ -69,6 +70,7 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
       if (ext === 'pdf') setFileType('pdf');
       else if (ext === 'pptx' || ext === 'ppt') setFileType('pptx');
       else if (ext === 'docx' || ext === 'doc') setFileType('docx');
+      else if (ext === 'xlsx' || ext === 'xls') setFileType('pdf'); // Drive handles Excel well as PDF preview
       else if (ext === 'mp4' || ext === 'mov') setFileType('mp4');
       else setFileType('pdf');
 
@@ -103,6 +105,7 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
       let finalFileUrl = lessonToEdit?.fileUrl || '';
       let storagePath: string | null = lessonToEdit?.storagePath || null;
       let calculatedSize = lessonToEdit?.fileSize || 0;
+      let finalFileType = fileType;
 
       if (sourceType === 'firebase_file' && selectedFile) {
         const uploadRes = await uploadLessonFile(
@@ -115,6 +118,14 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
         finalFileUrl = uploadRes.downloadUrl;
         storagePath = uploadRes.storagePath;
         calculatedSize = uploadRes.fileSize;
+      } else if (sourceType === 'google_drive' && selectedFile) {
+        setUploadProgress(10);
+        const { GoogleDriveService } = await import('../../services/googleDriveService');
+        const driveRes = await GoogleDriveService.uploadFile(selectedFile);
+        setUploadProgress(90);
+        finalFileUrl = driveRes.webViewLink;
+        calculatedSize = selectedFile.size;
+        finalFileType = 'drive';
       } else if (sourceType === 'external_link') {
         if (!externalUrl.trim()) {
           throw new Error('Vui lòng dán đường dẫn liên kết ngoài (Drive, YouTube, Canva, Scratch...).');
@@ -131,15 +142,15 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
           semester,
           chapter: chapter.trim(),
           summary: summary.trim(),
-          sourceType,
+          sourceType: sourceType === 'google_drive' ? 'external_link' : sourceType,
           fileUrl: finalFileUrl,
           storagePath,
-          fileType,
+          fileType: finalFileType,
           fileSize: calculatedSize,
           visibility,
           allowDownload,
           examId: examId.trim() ? examId.trim() : null
-        }, selectedFile ? lessonToEdit.storagePath : undefined, selectedFile || undefined);
+        }, selectedFile && sourceType === 'firebase_file' ? lessonToEdit.storagePath : undefined, selectedFile || undefined);
         
         alert('Cập nhật bài giảng thành công!');
         if (onLessonCreated) onLessonCreated();
@@ -151,10 +162,10 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
           semester,
           chapter: chapter.trim(),
           summary: summary.trim(),
-          sourceType,
+          sourceType: sourceType === 'google_drive' ? 'external_link' : sourceType,
           fileUrl: finalFileUrl,
           storagePath,
-          fileType,
+          fileType: finalFileType,
           fileSize: calculatedSize,
           visibility,
           allowDownload,
@@ -168,6 +179,7 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
       }
 
       setIsUploading(false);
+      setUploadProgress(100);
       if (onLessonCreated && !lessonToEdit) onLessonCreated();
     } catch (err: any) {
       console.error(err);
@@ -195,14 +207,14 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
               Phân hệ Giáo viên THCS Ngô Quyền
             </span>
             <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-200 font-bold text-xs">
-              Firebase Storage v10+ Hybrid
+              Hybrid Cloud Storage (Drive + Firebase)
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
             📤 Đăng Tải & Quản Lý Bài Giảng Thông Minh
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 mt-1">
-            Hỗ trợ tải file trực tiếp lên đám mây hoặc nhúng liên kết ngoài (Drive, YouTube, Canva, Scratch).
+            Hỗ trợ tải tệp lên <strong>Google Drive (Khuyên dùng - Miễn phí 15GB)</strong> hoặc Firebase Storage.
           </p>
         </div>
         {onClose && (
@@ -313,48 +325,68 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
           </h2>
 
           {/* Source Type Toggle */}
-          <div className="grid grid-cols-2 gap-3 p-1 bg-slate-100 rounded-xl">
+          <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setSourceType('google_drive')}
+              className={`py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1.5 ${
+                sourceType === 'google_drive' ? 'bg-white text-emerald-800 shadow-sm border border-emerald-100' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 48 48">
+                <path fill="#FFC107" d="M17 6h14l9 16H8l9-16z"></path>
+                <path fill="#1976D2" d="M31 6l9 16-11 19-9-16 11-19z"></path>
+                <path fill="#4CAF50" d="M17 6L8 22l11 19 11-19-11-16z"></path>
+              </svg>
+              <span>Lưu Google Drive</span>
+            </button>
             <button
               type="button"
               onClick={() => setSourceType('firebase_file')}
-              className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1.5 ${
                 sourceType === 'firebase_file' ? 'bg-white text-blue-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Upload className="w-3.5 h-3.5 text-blue-600" />
-              <span>Tải file lên Firebase</span>
+              <span>Firebase Cloud</span>
             </button>
             <button
               type="button"
               onClick={() => setSourceType('external_link')}
-              className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              className={`py-2 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1.5 ${
                 sourceType === 'external_link' ? 'bg-white text-blue-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <LinkIcon className="w-3.5 h-3.5 text-teal-600" />
-              <span>Dán Link ngoài (Drive, YouTube...)</span>
+              <span>Link (YouTube/Canva)</span>
             </button>
           </div>
 
-          {sourceType === 'firebase_file' ? (
+          {(sourceType === 'firebase_file' || sourceType === 'google_drive') ? (
             <div className="space-y-3">
               <div className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-6 text-center bg-slate-50/50 transition-all">
                 <input
                   type="file"
                   id="lesson-file-input"
                   onChange={handleFileChange}
-                  accept=".pdf,.pptx,.ppt,.docx,.doc,.mp4,.mov"
+                  accept=".pdf,.pptx,.ppt,.docx,.doc,.xlsx,.xls,.mp4,.mov"
                   className="hidden"
                 />
                 <label htmlFor="lesson-file-input" className="cursor-pointer flex flex-col items-center justify-center space-y-2">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-inner">
-                    <Upload className="w-6 h-6" />
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${sourceType === 'google_drive' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                    {sourceType === 'google_drive' ? (
+                      <svg className="w-6 h-6" viewBox="0 0 48 48">
+                        <path fill="#FFC107" d="M17 6h14l9 16H8l9-16z"></path>
+                        <path fill="#1976D2" d="M31 6l9 16-11 19-9-16 11-19z"></path>
+                        <path fill="#4CAF50" d="M17 6L8 22l11 19 11-19-11-16z"></path>
+                      </svg>
+                    ) : <Upload className="w-6 h-6" />}
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 inline-block mb-1">
-                      Chọn tệp bài giảng
+                    <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border inline-block mb-1 ${sourceType === 'google_drive' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                      {sourceType === 'google_drive' ? 'Tải tệp lên Google Drive của Thầy' : 'Chọn tệp bài giảng'}
                     </span>
-                    <p className="text-xs text-slate-500">Hỗ trợ PDF, PowerPoint (.pptx), Word (.docx), Video (.mp4) tối đa 15MB</p>
+                    <p className="text-xs text-slate-500">Hỗ trợ PDF, PowerPoint, Word, Excel, Video</p>
                   </div>
                   {selectedFile && (
                     <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl">
@@ -363,6 +395,25 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
                     </div>
                   )}
                 </label>
+              </div>
+
+              {sourceType === 'google_drive' && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] flex items-start gap-2 leading-relaxed">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Ưu điểm lưu trữ Google Drive:</p>
+                    <p>Dữ liệu được lưu vĩnh viễn trên Drive cá nhân, bảo mật tuyệt đối và học sinh luôn xem được tệp Office (PowerPoint, Word, Excel) ở chế độ hiển thị tốt nhất.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Starter Tier Warning */}
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold mb-0.5">Lưu ý quan trọng cho Gói Starter (Miễn phí):</p>
+                  <p>Firebase Storage có thể bị vô hiệu hóa hoặc gặp lỗi CORS trên gói Starter. Nếu việc "Tải file lên Firebase" thất bại, hãy <strong>Dùng trình xem dự phòng</strong> hoặc chuyển sang <strong>"Dán Link ngoài"</strong> (khuyên dùng Google Drive đã cấp quyền xem công khai) để đảm bảo học sinh luôn xem được bài giảng.</p>
+                </div>
               </div>
 
               {/* Upload Progress Bar */}

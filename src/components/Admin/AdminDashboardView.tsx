@@ -89,7 +89,7 @@ interface AdminDashboardViewProps {
   onNavigateToTab: (tab: NavigationTab) => void;
 }
 
-type AdminSection = 'overview' | 'accounts' | 'news' | 'lessons' | 'exams' | 'attempts' | 'questions';
+type AdminSection = 'overview' | 'accounts' | 'news' | 'exams' | 'attempts' | 'questions';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   currentUser,
@@ -163,7 +163,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     { id: 'overview', label: 'Tổng Quan', icon: ShieldCheck, badge: totalPendingModeration > 0 ? `${totalPendingModeration} cần duyệt` : 'Thống kê' },
     { id: 'accounts', label: 'Tài Khoản', icon: Users, count: users.length },
     { id: 'news', label: 'Tin Tức & Thông Báo', icon: Newspaper, count: news.length, pending: pendingNewsCount },
-    { id: 'lessons', label: 'Bài Giảng Cloud', icon: Presentation, count: lessons.length },
     { id: 'exams', label: 'Bài Kiểm Tra', icon: FileText, count: exams.length, pending: pendingExamsCount },
     { id: 'attempts', label: 'Lịch Sử & Kết Quả', icon: History, count: attempts.length },
     { id: 'questions', label: 'Ngân Hàng Câu Hỏi', icon: Database, count: questions.length },
@@ -333,18 +332,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
 
             <div 
-              onClick={() => setActiveSection('lessons')}
+              onClick={() => setActiveSection('news')}
               className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase">Bài giảng Cloud</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">Tin tức</span>
                 <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Presentation className="w-4 h-4" />
+                  <Newspaper className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-2xl font-extrabold text-slate-900 mt-2">{lessons.length}</div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-2">{news.length}</div>
               <p className="text-[11px] text-slate-500 mt-1">
-                {news.length} tin tức thông báo
+                {lessons.length} bài giảng trong thư viện
               </p>
             </div>
           </div>
@@ -607,39 +606,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
-      {/* ================= SECTION: BÀI GIẢNG CLOUD ================= */}
-      {activeSection === 'lessons' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
-            <div>
-              <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                <Presentation className="w-5 h-5 text-teal-600" />
-                <span>Quản Lý Bài Giảng Cloud ({lessons.length})</span>
-              </h3>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {lessons.map(lesson => (
-              <div key={lesson.id} className="p-4 border border-slate-200 rounded-xl flex items-center justify-between hover:border-blue-300 transition-colors">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900">{lesson.title}</h4>
-                  <p className="text-xs text-slate-500">Khối {lesson.grade} • {lesson.subject}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    if (confirm(`Bạn có chắc muốn xóa bài giảng ${lesson.title}?`)) {
-                      onDeleteLesson(lesson.id, lesson.storagePath);
-                    }
-                  }}
-                  className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* ================= SECTION: BÀI KIỂM TRA ================= */}
       {activeSection === 'exams' && (

@@ -76,6 +76,7 @@ export function App() {
   const [editingExam, setEditingExam] = useState<Exam | null | undefined>(undefined); // null = new, Exam = edit, undefined = closed
   const [editingQuestion, setEditingQuestion] = useState<Question | null | undefined>(undefined);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [isUploaderOpen, setIsUploaderOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [viewingAttempt, setViewingAttempt] = useState<ExamAttempt | null>(null);
   const [isCloudflareModalOpen, setIsCloudflareModalOpen] = useState(false);
@@ -652,14 +653,8 @@ export function App() {
           />
         )}
 
-        {/* CHỨC NĂNG 1.5: Đã hợp nhất vào Kho Thư Viện Bài Giảng chung */}
-        {activeTab === 'materials' && (
-          <div className="p-8 text-center bg-white rounded-2xl border border-slate-200">
-            <p className="text-slate-500">Chức năng này đã được hợp nhất vào Kho Thư Viện Bài Giảng chung.</p>
-          </div>
-        )}
 
-        {/* Thư viện bài giảng cloud cho học sinh & khách */}
+
         {activeTab === 'lessons' && (
           <StudentLessonCatalog
             currentUser={currentUser}
@@ -675,22 +670,11 @@ export function App() {
             onDeleteLesson={handleDeleteLesson}
             onEditLesson={(lesson) => {
               setEditingLesson(lesson);
-              setActiveTab('teacher_lessons');
+              setIsUploaderOpen(true);
             }}
-          />
-        )}
-
-        {/* Phân hệ giáo viên upload bài giảng cloud */}
-        {activeTab === 'teacher_lessons' && (
-          <TeacherLessonUploader
-            lessonToEdit={editingLesson || undefined}
-            onClose={() => {
+            onNavigateToUpload={() => {
               setEditingLesson(null);
-              setActiveTab('lessons');
-            }}
-            onLessonCreated={() => {
-              setEditingLesson(null);
-              setActiveTab('lessons');
+              setIsUploaderOpen(true);
             }}
           />
         )}
@@ -1018,7 +1002,27 @@ export function App() {
         />
       )}
 
-      {/* Floating Auto-Sync Notification Toast */}
+      {/* MODAL 11: Teacher Lesson Uploader (Unified) */}
+      {isUploaderOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="min-h-screen flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-7xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <TeacherLessonUploader
+                lessonToEdit={editingLesson || undefined}
+                onClose={() => {
+                  setIsUploaderOpen(false);
+                  setEditingLesson(null);
+                }}
+                onLessonCreated={() => {
+                  setIsUploaderOpen(false);
+                  setEditingLesson(null);
+                  reloadAllData();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
       {syncToast && (
         <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900/90 text-white text-xs font-semibold shadow-2xl backdrop-blur-md border border-emerald-500/40 animate-fade-in pointer-events-none">
           <span className="relative flex h-2 w-2">

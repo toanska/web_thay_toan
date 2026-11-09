@@ -138,6 +138,7 @@ export const StudentLessonCatalog: React.FC<StudentLessonCatalogProps> = ({
       case 'pdf': return { label: 'PDF', color: 'bg-rose-100 text-rose-800 border-rose-200', icon: FileText };
       case 'pptx': return { label: 'PowerPoint', color: 'bg-amber-100 text-amber-800 border-amber-200', icon: Presentation };
       case 'docx': return { label: 'Word (DOCX)', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: FileText };
+      case 'xlsx': return { label: 'Excel (XLSX)', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: FileText };
       case 'mp4': return { label: 'Video MP4', color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: Video };
       case 'youtube': return { label: 'YouTube', color: 'bg-red-100 text-red-800 border-red-200', icon: Video };
       default: return { label: 'Tài liệu số', color: 'bg-slate-100 text-slate-800 border-slate-200', icon: BookOpen };

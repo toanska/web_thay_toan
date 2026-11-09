@@ -14,7 +14,8 @@ import {
   Layers, 
   Play, 
   FileText,
-  ShieldCheck
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { Lesson, incrementLessonView, getSmartEmbedUrl } from '../../services/lessonService';
 
@@ -26,12 +27,13 @@ interface AdaptiveLessonViewerProps {
 
 export const AdaptiveLessonViewer: React.FC<AdaptiveLessonViewerProps> = ({ lesson, onClose, onTakeExam }) => {
   const [copiedLink, setCopiedLink] = useState(false);
+  const [useProxy, setUseProxy] = useState(false);
 
   useEffect(() => {
     incrementLessonView(lesson.id);
   }, [lesson.id]);
 
-  const embedUrl = getSmartEmbedUrl(lesson.fileUrl, lesson.fileType);
+  const embedUrl = getSmartEmbedUrl(lesson.fileUrl, lesson.fileType, useProxy);
 
   const handleCopyLink = () => {
     const shareUrl = `${window.location.origin}/?lesson=${lesson.id}`;
@@ -99,6 +101,20 @@ export const AdaptiveLessonViewer: React.FC<AdaptiveLessonViewerProps> = ({ less
               </h3>
 
               <div className="flex items-center gap-2">
+                {lesson.fileUrl.includes('drive.google.com') && (
+                  <button
+                    onClick={() => setUseProxy(!useProxy)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs border ${
+                      useProxy 
+                        ? 'bg-amber-600 text-white border-amber-700' 
+                        : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>{useProxy ? 'Dùng trình xem chuẩn' : 'Dùng trình xem dự phòng'}</span>
+                  </button>
+                )}
+
                 <a
                   href={lesson.fileUrl}
                   target="_blank"
@@ -119,7 +135,10 @@ export const AdaptiveLessonViewer: React.FC<AdaptiveLessonViewerProps> = ({ less
                         const a = document.createElement('a');
                         a.href = url;
                         // Force extension based on fileType
-                        const ext = lesson.fileType === 'pptx' ? '.pptx' : lesson.fileType === 'docx' ? '.docx' : lesson.fileType === 'pdf' ? '.pdf' : '';
+                        const ext = lesson.fileType === 'pptx' ? '.pptx' : 
+                                   lesson.fileType === 'docx' ? '.docx' : 
+                                   lesson.fileType === 'xlsx' ? '.xlsx' : 
+                                   lesson.fileType === 'pdf' ? '.pdf' : '';
                         a.download = `${lesson.title}${ext}`;
                         document.body.appendChild(a);
                         a.click();
@@ -145,6 +164,7 @@ export const AdaptiveLessonViewer: React.FC<AdaptiveLessonViewerProps> = ({ less
                 <div className="w-full h-full relative">
                   <iframe
                     src={embedUrl}
+                    key={useProxy ? 'proxy' : 'standard'}
                     title={lesson.title}
                     className="w-full h-full border-none bg-white touch-auto"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -154,6 +174,27 @@ export const AdaptiveLessonViewer: React.FC<AdaptiveLessonViewerProps> = ({ less
                   <div className="absolute top-2 right-2 p-2 bg-slate-800/70 text-white text-[10px] rounded-lg pointer-events-none sm:hidden">
                     Dùng 2 ngón tay để thu phóng
                   </div>
+                  
+                  {/* Drive Troubleshooting Info */}
+                  {lesson.fileUrl.includes('drive.google.com') && (
+                    <div className="absolute bottom-2 left-2 right-2 flex justify-center pointer-events-none">
+                      <div className="bg-white/95 backdrop-blur-sm px-4 py-2 rounded-xl border border-amber-200 shadow-lg pointer-events-auto flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="text-[10px] text-slate-800 font-bold">LỖI DRIVE? Bấm "Dùng trình xem dự phòng" ở góc trên nếu tài liệu không hiện ra.</span>
+                        </div>
+                        <a 
+                          href={lesson.fileUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-lg"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Mở trực tiếp trên Google Drive (Khuyên dùng khi bị lỗi)</span>
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-white text-xs text-center p-6 space-y-2">
