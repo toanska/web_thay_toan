@@ -37,6 +37,7 @@ import { MaterialUploadModal } from './MaterialUploadModal';
 import { MaterialDetailModal } from './MaterialDetailModal';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
 import { RejectModal } from '../Admin/RejectModal';
+import { downloadLessonMaterialFile } from '../../utils/fileExporter';
 
 interface MaterialListViewProps {
   materials: LessonMaterial[];
@@ -152,37 +153,7 @@ export const MaterialListView: React.FC<MaterialListViewProps> = ({
   // File Download Handler
   const handleDownload = (material: LessonMaterial) => {
     onIncrementDownload(material.id);
-
-    if (material.fileUrl) {
-      // If has Base64 or DataURL
-      const a = document.createElement('a');
-      a.href = material.fileUrl;
-      a.download = material.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else {
-      // Generate formatted blob content
-      const content = `TÊN TÀI LIỆU: ${material.title}\n` +
-        `KHỐI LỚP: Tin học ${material.grade}\n` +
-        `CHỦ ĐỀ: ${material.unit || 'Chương trình GDPT 2018'}\n` +
-        `TÁC GIẢ: ${material.authorName}\n` +
-        `NGÀY ĐĂNG: ${material.createdAt}\n` +
-        `-----------------------------------------\n` +
-        `MÔ TẢ:\n${material.description}\n\n` +
-        `NỘI DUNG KẾ HOẠCH BÀI DẠY (GIÁO ÁN):\n${material.contentOutline || 'Chưa có đề cương chi tiết.'}\n\n` +
-        `Hệ thống Kho Học Liệu & Bài Giảng Tin Học - Thầy Toàn`;
-
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = material.fileName.replace(/\.[^/.]+$/, '') + '.txt';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
+    downloadLessonMaterialFile(material);
   };
 
   const handleOpenDetail = (material: LessonMaterial) => {

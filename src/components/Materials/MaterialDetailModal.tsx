@@ -238,6 +238,25 @@ export const MaterialDetailModal: React.FC<MaterialDetailModalProps> = ({
                   <Sparkles className="w-4 h-4 text-amber-600" />
                   <span>Kế Hoạch Bài Dạy (Khung 5512 / Tiến trình bài học)</span>
                 </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fullText = `TRƯỜNG THCS NGÔ QUYỀN - KHO HỌC LIỆU TIN HỌC\n` +
+                      `TÊN TÀI LIỆU: ${material.title}\n` +
+                      `KHỐI LỚP: Tin học ${material.grade}\n` +
+                      `PHÂN PHỐI CHƯƠNG TRÌNH: ${material.unit || 'GDPT 2018'}\n` +
+                      `GIÁO VIÊN BIÊN SOẠN: ${material.authorName}\n\n` +
+                      `-----------------------------------------------\n` +
+                      `I. MÔ TẢ TÀI LIỆU:\n${material.description}\n\n` +
+                      `II. NỘI DUNG CHI TIẾT BÀI DẠY (KHUNG 5512):\n${material.contentOutline}`;
+                    navigator.clipboard.writeText(fullText);
+                    alert('✓ Đã sao chép toàn bộ nội dung giáo án vào bộ nhớ tạm!');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Sao chép nội dung</span>
+                </button>
               </div>
               <div className="p-4 rounded-xl bg-slate-900 text-slate-100 text-xs font-mono whitespace-pre-wrap leading-relaxed border border-slate-800 shadow-inner overflow-x-auto">
                 {material.contentOutline}
