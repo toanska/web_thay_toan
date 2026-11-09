@@ -65,6 +65,10 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
   const rank = getRankBadge(attempt.score);
   const correctCount = attempt.questionResults.filter(q => q.isCorrect).length;
   const totalCount = attempt.questionResults.length;
+  const answeredCount = attempt.questionResults.filter(q => {
+    if (Array.isArray(q.studentAnswer)) return q.studentAnswer.length > 0;
+    return q.studentAnswer !== undefined && q.studentAnswer !== null && q.studentAnswer !== '';
+  }).length;
 
   const handlePrint = () => {
     window.print();
@@ -142,21 +146,43 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
 
           {/* Stat Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-              <div>
-                <span className="text-emerald-700 font-semibold block text-[11px]">Đúng</span>
-                <strong className="text-lg font-black text-emerald-900">{correctCount} / {totalCount}</strong>
-              </div>
-              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-            </div>
+            {isTeacherOrAdmin ? (
+              <>
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-emerald-700 font-semibold block text-[11px]">Đúng</span>
+                    <strong className="text-lg font-black text-emerald-900">{correctCount} / {totalCount}</strong>
+                  </div>
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                </div>
 
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between">
-              <div>
-                <span className="text-rose-700 font-semibold block text-[11px]">Sai / Bỏ trống</span>
-                <strong className="text-lg font-black text-rose-900">{totalCount - correctCount} câu</strong>
-              </div>
-              <XCircle className="w-6 h-6 text-rose-600" />
-            </div>
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-rose-700 font-semibold block text-[11px]">Sai / Bỏ trống</span>
+                    <strong className="text-lg font-black text-rose-900">{totalCount - correctCount} câu</strong>
+                  </div>
+                  <XCircle className="w-6 h-6 text-rose-600" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-slate-600 font-semibold block text-[11px]">Tổng số câu hỏi</span>
+                    <strong className="text-lg font-black text-slate-900">{totalCount} câu</strong>
+                  </div>
+                  <BookOpen className="w-6 h-6 text-slate-500" />
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-indigo-700 font-semibold block text-[11px]">Số câu em đã chọn</span>
+                    <strong className="text-lg font-black text-indigo-900">{answeredCount} / {totalCount}</strong>
+                  </div>
+                  <CheckCircle2 className="w-6 h-6 text-indigo-600" />
+                </div>
+              </>
+            )}
 
             <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between">
               <div>
@@ -191,7 +217,9 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
           <div className="space-y-4 pt-2">
             <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-blue-600" />
-              Chi Tiết Toàn Bộ Bài Làm & Lời Giải Hướng Dẫn ({attempt.questionResults.length} câu)
+              {isTeacherOrAdmin
+                ? `Chi Tiết Toàn Bộ Bài Làm & Lời Giải Hướng Dẫn (${attempt.questionResults.length} câu)`
+                : `Danh Sách Các Câu Hỏi & Đáp Án Em Đã Chọn (${attempt.questionResults.length} câu)`}
             </h3>
 
             <div className="space-y-4">
@@ -256,13 +284,16 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                           const letter = String.fromCharCode(65 + optIdx);
 
                           let style = 'border-slate-200 bg-white text-slate-700';
-                          if (isCorrectOption) {
-                            style = 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold';
-                          }
-                          if (isStudentSelected && !isCorrectOption && showDetailedAnswers) {
-                            style = 'border-rose-400 bg-rose-50 text-rose-900 line-through';
-                          } else if (isStudentSelected && !isCorrectOption && !showDetailedAnswers) {
-                            style = 'border-blue-300 bg-blue-50/50 text-slate-800';
+                          if (showDetailedAnswers) {
+                            if (isCorrectOption) {
+                              style = 'border-emerald-500 bg-emerald-50 text-emerald-900 font-bold';
+                            } else if (isStudentSelected) {
+                              style = 'border-rose-400 bg-rose-50 text-rose-900 line-through';
+                            }
+                          } else {
+                            if (isStudentSelected) {
+                              style = 'border-blue-500 bg-blue-50 text-blue-900 font-bold';
+                            }
                           }
 
                           return (
@@ -273,10 +304,10 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                               <span className="truncate">{opt}</span>
                               {isStudentSelected && (
                                 <span className="text-[10px] ml-auto px-1.5 py-0.5 rounded-sm bg-blue-100 text-blue-900 font-bold shrink-0">
-                                  Học sinh chọn
+                                  {isTeacherOrAdmin ? 'Học sinh chọn' : 'Đáp án em đã chọn'}
                                 </span>
                               )}
-                              {isCorrectOption && (
+                              {showDetailedAnswers && isCorrectOption && (
                                 <span className="text-[10px] ml-auto px-1.5 py-0.5 rounded-sm bg-emerald-200 text-emerald-900 font-bold shrink-0">
                                   Đáp án đúng
                                 </span>
@@ -291,7 +322,9 @@ export const ExamResultModal: React.FC<ExamResultModalProps> = ({
                     {(!options || qType === 'fill_in' || qType === 'essay') && (
                       <div className="space-y-1.5 text-xs">
                         <div className="p-2.5 rounded-lg bg-white border border-slate-200">
-                          <span className="text-slate-400 block text-[11px]">Câu trả lời của học sinh:</span>
+                          <span className="text-slate-400 block text-[11px]">
+                            {isTeacherOrAdmin ? 'Câu trả lời của học sinh:' : 'Câu trả lời của em:'}
+                          </span>
                           <strong className="text-slate-800">{String(result.studentAnswer ?? '(Chưa trả lời)')}</strong>
                         </div>
                         {showDetailedAnswers && correctAnswers && correctAnswers.length > 0 && (
