@@ -20,6 +20,7 @@ import {
   orderBy,
   onSnapshot
 } from 'firebase/firestore';
+import { optimizeMaterialPayload, optimizeQuestionPayload, optimizeUserPayload } from '../utils/dataCompressor';
 
 // Constants
 export const DEFAULT_SITE_LOGO = '/assets/aistudio/LOGO_WEB_05e2bec9.jpg';
@@ -186,9 +187,10 @@ export const StorageService = {
 
   async saveUser(user: User): Promise<User> {
     try {
-      const sanitized = cleanForFirestore(user);
+      const optimized = await optimizeUserPayload(user);
+      const sanitized = cleanForFirestore(optimized);
       await setDoc(doc(db, 'users', user.id), sanitized);
-      return user;
+      return optimized;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
       return user;
@@ -220,9 +222,10 @@ export const StorageService = {
 
   async saveQuestion(question: Question): Promise<Question> {
     try {
-      const sanitized = cleanForFirestore(question);
+      const optimized = optimizeQuestionPayload(question);
+      const sanitized = cleanForFirestore(optimized);
       await setDoc(doc(db, 'questions', question.id), sanitized);
-      return question;
+      return optimized;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `questions/${question.id}`);
       return question;
@@ -340,15 +343,15 @@ export const StorageService = {
 
   async saveMaterial(material: LessonMaterial): Promise<LessonMaterial> {
     try {
-      let sanitized = cleanForFirestore(material);
+      const optimized = optimizeMaterialPayload(material);
+      let sanitized = cleanForFirestore(optimized);
       // Safe check: Firestore has a 1MB per document limit.
-      // If fileUrl base64 is larger than ~650KB, strip fileUrl for cloud sync while preserving all metadata & content outline.
-      if (sanitized.fileUrl && typeof sanitized.fileUrl === 'string' && sanitized.fileUrl.length > 650000) {
-        console.warn('Tệp có dung lượng base64 lớn (>650KB), lược bỏ fileUrl khi đồng bộ Firestore để tránh vượt quá giới hạn 1MB.');
+      if (sanitized.fileUrl && typeof sanitized.fileUrl === 'string' && sanitized.fileUrl.length > 350000) {
+        console.warn('Tệp có dung lượng base64 lớn (>350KB), nén/lược bỏ fileUrl khi đồng bộ Firestore để dữ liệu luôn nhẹ.');
         delete sanitized.fileUrl;
       }
       await setDoc(doc(db, 'materials', material.id), sanitized);
-      return material;
+      return optimized;
     } catch (error) {
       console.warn('Thử lại lưu bài giảng không kèm fileUrl lớn...', error);
       try {

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { LessonMaterial, GradeLevel, Subject, User } from '../../types';
 import { isTeacherToanOrAdmin } from '../../utils/authUtils';
+import { compressImageFile } from '../../utils/dataCompressor';
 
 interface MaterialUploadModalProps {
   isOpen: boolean;
@@ -201,16 +202,27 @@ export const MaterialUploadModal: React.FC<MaterialUploadModalProps> = ({
       textReader.readAsText(file);
     }
 
-    // Read base64 data URL
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setFileDataUrl(e.target.result as string);
+    // Read base64 data URL with automatic compression for images
+    if (file.type.startsWith('image/')) {
+      compressImageFile(file, 1000, 0.75).then((compressedDataUrl) => {
+        setFileDataUrl(compressedDataUrl);
+        const originalKB = Math.round(file.size / 1024);
+        const compressedKB = Math.round(compressedDataUrl.length / 1024);
+        console.log(`Nén ảnh tự động: từ ${originalKB}KB giảm còn ${compressedKB}KB`);
         setUploadSuccessNotice(true);
         setTimeout(() => setUploadSuccessNotice(false), 3500);
-      }
-    };
-    reader.readAsDataURL(file);
+      });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setFileDataUrl(e.target.result as string);
+          setUploadSuccessNotice(true);
+          setTimeout(() => setUploadSuccessNotice(false), 3500);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
