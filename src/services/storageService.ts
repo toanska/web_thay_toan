@@ -120,51 +120,38 @@ export const StorageService = {
     news: NewsArticle[], 
     materials: LessonMaterial[] 
   }): Promise<void> {
-    const { signInAnonymously, onAuthStateChanged } = await import('firebase/auth');
-    
-    return new Promise((resolve) => {
-      // Set a safety timeout to ensure app doesn't hang forever
-      const timeout = setTimeout(() => {
-        console.warn('Firebase initialization timed out. Continuing without auth...');
-        resolve();
-      }, 5000);
-
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          try {
-            await signInAnonymously(auth);
-          } catch (error: any) {
-            if (error.code === 'auth/admin-restricted-operation') {
-              console.error('LỖI: Bạn cần kích hoạt "Anonymous Sign-in" trong Firebase Console (Authentication > Sign-in method).');
-            } else {
-              console.error('Anonymous auth failed:', error);
-            }
-            clearTimeout(timeout);
-            resolve(); // Resolve anyway so app can load
-          }
-        } else {
-          clearTimeout(timeout);
-          // Check if database needs seeding
-          try {
-            const usersSnapshot = await getDocs(collection(db, 'users'));
-            if (usersSnapshot.empty) {
-              console.log('Seeding initial data to Firestore...');
-              await Promise.all([
-                ...initialData.users.map(u => setDoc(doc(db, 'users', u.id), u)),
-                ...initialData.questions.map(q => setDoc(doc(db, 'questions', q.id), q)),
-                ...initialData.exams.map(e => setDoc(doc(db, 'exams', e.id), e)),
-                ...initialData.news.map(n => setDoc(doc(db, 'news', n.id), n)),
-                ...initialData.materials.map(m => setDoc(doc(db, 'materials', m.id), m))
-              ]);
-              console.log('Seeding completed successfully.');
-            }
-          } catch (error) {
-            console.error('Error checking/seeding data:', error);
-          }
-          resolve();
+    const seedIfNeeded = async () => {
+      try {
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        if (usersSnapshot.empty) {
+          console.log('Chưa có dữ liệu trên Firestore, đang tiến hành khởi tạo ban đầu...');
+          await Promise.all([
+            ...initialData.users.map(u => setDoc(doc(db, 'users', u.id), u)),
+            ...initialData.questions.map(q => setDoc(doc(db, 'questions', q.id), q)),
+            ...initialData.exams.map(e => setDoc(doc(db, 'exams', e.id), e)),
+            ...initialData.news.map(n => setDoc(doc(db, 'news', n.id), n)),
+            ...initialData.materials.map(m => setDoc(doc(db, 'materials', m.id), m))
+          ]);
+          console.log('Khởi tạo dữ liệu ban đầu lên Firestore thành công!');
         }
-      });
-    });
+      } catch (err) {
+        console.warn('Không thể kiểm tra/khởi tạo dữ liệu tự động:', err);
+      }
+    };
+
+    // Attempt anonymous sign-in if enabled, but don't block DB check
+    try {
+      const { signInAnonymously } = await import('firebase/auth');
+      if (!auth.currentUser) {
+        signInAnonymously(auth).catch(() => {
+          // Anonymous auth not enabled or restricted; continue unauthenticated since rules allow read/write
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    await seedIfNeeded();
   },
 
   logoutUser(): void {
@@ -375,25 +362,31 @@ export const StorageService = {
   }) {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       callbacks.onUsers?.(snap.docs.map(d => d.data() as User));
-    });
+    }, (err) => console.error('Lỗi lắng nghe users realtime:', err));
+
     const unsubExams = onSnapshot(collection(db, 'exams'), (snap) => {
       callbacks.onExams?.(snap.docs.map(d => d.data() as Exam));
-    });
+    }, (err) => console.error('Lỗi lắng nghe exams realtime:', err));
+
     const unsubNews = onSnapshot(query(collection(db, 'news'), orderBy('publishedAt', 'desc')), (snap) => {
       callbacks.onNews?.(snap.docs.map(d => d.data() as NewsArticle));
-    });
+    }, (err) => console.error('Lỗi lắng nghe news realtime:', err));
+
     const unsubMaterials = onSnapshot(collection(db, 'materials'), (snap) => {
       callbacks.onMaterials?.(snap.docs.map(d => d.data() as LessonMaterial));
-    });
+    }, (err) => console.error('Lỗi lắng nghe materials realtime:', err));
+
     const unsubAttempts = onSnapshot(query(collection(db, 'attempts'), orderBy('submittedAt', 'desc')), (snap) => {
       callbacks.onAttempts?.(snap.docs.map(d => d.data() as ExamAttempt));
-    });
+    }, (err) => console.error('Lỗi lắng nghe attempts realtime:', err));
+
     const unsubQuestions = onSnapshot(collection(db, 'questions'), (snap) => {
       callbacks.onQuestions?.(snap.docs.map(d => d.data() as Question));
-    });
+    }, (err) => console.error('Lỗi lắng nghe questions realtime:', err));
+
     const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('timestamp', 'desc')), (snap) => {
       callbacks.onNotifications?.(snap.docs.map(d => d.data() as NotificationItem));
-    });
+    }, (err) => console.error('Lỗi lắng nghe notifications realtime:', err));
 
     return () => {
       unsubUsers();

@@ -31,20 +31,104 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
   onFinishAttempt,
   onCancel
 }) => {
+  const storageKey = `thcs_exam_session_${currentUser.id}_${exam.id}`;
+
+  const [examQuestions] = useState<Question[]>(() => {
+    try {
+      const saved = localStorage.getItem(`thcs_exam_session_${currentUser.id}_${exam.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.questionOrder) && parsed.questionOrder.length === exam.questions.length) {
+          const map = new Map(exam.questions.map(q => [q.id, q]));
+          const reordered = parsed.questionOrder.map((id: string) => map.get(id)).filter(Boolean);
+          if (reordered.length === exam.questions.length) {
+            return reordered as Question[];
+          }
+        }
+      }
+    } catch (e) {}
+
+    if (exam.shuffleQuestions) {
+      const copy = [...exam.questions];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+    return exam.questions;
+  });
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({});
-  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
-  const [timeLeftSeconds, setTimeLeftSeconds] = useState(exam.durationMinutes * 60);
+  const [answers, setAnswers] = useState<Record<string, any>>(() => {
+    try {
+      const saved = localStorage.getItem(`thcs_exam_session_${currentUser.id}_${exam.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.answers || {};
+      }
+    } catch (e) {}
+    return {};
+  });
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(`thcs_exam_session_${currentUser.id}_${exam.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.flagged || {};
+      }
+    } catch (e) {}
+    return {};
+  });
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`thcs_exam_session_${currentUser.id}_${exam.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.timeLeft === 'number' && parsed.timeLeft > 0) {
+          return parsed.timeLeft;
+        }
+      }
+    } catch (e) {}
+    return exam.durationMinutes * 60;
+  });
   const [startTime] = useState(new Date().toISOString());
-  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [tabSwitchCount, setTabSwitchCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`thcs_exam_session_${currentUser.id}_${exam.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.tabSwitchCount || 0;
+      }
+    } catch (e) {}
+    return 0;
+  });
   const [showCheatWarning, setShowCheatWarning] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoSavedToast, setAutoSavedToast] = useState(false);
 
   const dispatchFinish = useCallback((attempt: ExamAttempt) => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch (e) {}
     if (onFinishExam) onFinishExam(attempt);
     else if (onFinishAttempt) onFinishAttempt(attempt);
-  }, [onFinishExam, onFinishAttempt]);
+  }, [onFinishExam, onFinishAttempt, storageKey]);
+
+  // Persist exam session to localStorage on every answer/flag/timer change
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({
+        questionOrder: examQuestions.map(q => q.id),
+        answers,
+        flagged: flaggedQuestions,
+        timeLeft: timeLeftSeconds,
+        tabSwitchCount,
+        lastUpdated: Date.now()
+      }));
+    } catch (e) {}
+  }, [answers, flaggedQuestions, timeLeftSeconds, tabSwitchCount, storageKey, examQuestions]);
 
   // Anti-cheat tab switch listener
   useEffect(() => {
@@ -78,10 +162,10 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
   // Compute final score & question results
   const calculateResult = useCallback((submitType: 'manual' | 'timeout' = 'manual'): ExamAttempt => {
     let earnedPoints = 0;
-    const totalMaxPoints = exam.questions.reduce((acc, q) => acc + (q.points || 1.0), 0);
+    const totalMaxPoints = examQuestions.reduce((acc, q) => acc + (q.points || 1.0), 0);
     const questionResults: QuestionResult[] = [];
 
-    exam.questions.forEach(q => {
+    examQuestions.forEach(q => {
       const studentAns = answers[q.id];
       const maxPts = q.points || 1.0;
       let isCorrect = false;
@@ -209,10 +293,10 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
     }, 300);
   };
 
-  const currentQ = exam.questions[currentQuestionIndex];
+  const currentQ = examQuestions[currentQuestionIndex] || examQuestions[0];
   const answeredCount = Object.keys(answers).length;
-  const totalCount = exam.questions.length;
-  const isCurrentFlagged = !!flaggedQuestions[currentQ.id];
+  const totalCount = examQuestions.length;
+  const isCurrentFlagged = currentQ ? !!flaggedQuestions[currentQ.id] : false;
 
   const formatTimer = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -220,11 +304,44 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Block Ctrl+C, Ctrl+V, F12, Right click to prevent cheating
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Block F12, Ctrl+C, Ctrl+V, Ctrl+U
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V' || e.key === 'u' || e.key === 'U'))
+      ) {
+        e.preventDefault();
+        setShowCheatWarning(true);
+      }
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const triggerAutoSaveFeedback = () => {
+    setAutoSavedToast(true);
+    setTimeout(() => setAutoSavedToast(false), 2000);
+  };
+
   const handleSelectOption = (index: number) => {
     setAnswers(prev => ({
       ...prev,
       [currentQ.id]: index
     }));
+    triggerAutoSaveFeedback();
   };
 
   const handleSelectMultiOption = (index: number) => {
@@ -235,6 +352,7 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
       ...prev,
       [currentQ.id]: updated
     }));
+    triggerAutoSaveFeedback();
   };
 
   const handleFillInChange = (text: string) => {
@@ -242,6 +360,7 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
       ...prev,
       [currentQ.id]: text
     }));
+    triggerAutoSaveFeedback();
   };
 
   const toggleFlag = () => {
@@ -518,7 +637,7 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
 
             {/* Matrix of Question Badges */}
             <div className="grid grid-cols-5 gap-2 pt-2">
-              {exam.questions.map((q, idx) => {
+              {examQuestions.map((q, idx) => {
                 const isAnswered = answers[q.id] !== undefined && answers[q.id] !== '';
                 const isFlagged = flaggedQuestions[q.id];
                 const isCurrent = currentQuestionIndex === idx;
@@ -665,6 +784,14 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Auto-saved Toast */}
+      {autoSavedToast && (
+        <div className="fixed bottom-5 left-5 z-50 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 text-white text-xs font-semibold shadow-xl backdrop-blur-md border border-emerald-500/40 animate-fade-in pointer-events-none">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          <span>Đã tự động lưu câu trả lời vào máy</span>
         </div>
       )}
     </div>

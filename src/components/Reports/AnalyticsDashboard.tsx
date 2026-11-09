@@ -97,8 +97,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   });
 
   // 3. Subject Mastery Radar Data
-  const subjects = ['Toán học', 'Tiếng Anh', 'Khoa học tự nhiên', 'Ngữ văn'];
-  const subjectMasteryData = subjects.map(sub => {
+  const detectedSubjects = Array.from(new Set([
+    ...exams.map(e => e.subject).filter(Boolean),
+    ...attempts.map(a => a.subject).filter(Boolean)
+  ]));
+  const subjects = detectedSubjects.length > 0 
+    ? detectedSubjects 
+    : ['Tin học 6', 'Tin học 7', 'Tin học 8', 'Tin học 9'];
+  const subjectMasteryData = subjects.slice(0, 6).map(sub => {
     const subAttempts = attempts.filter(a => a.subject === sub);
     const subAvg = subAttempts.length > 0
       ? Math.round((subAttempts.reduce((sum, a) => sum + a.score, 0) / subAttempts.length) * 10)
@@ -428,6 +434,73 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Item Difficulty Index Analysis (Chỉ số độ khó & Tỷ lệ sai theo từng câu hỏi) */}
+      {selectedExamId !== 'all' && (
+        <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>Phân Tích Ma Trận Độ Khó & Tỷ Lệ Sai Từng Câu Hỏi</span>
+              </h3>
+              <p className="text-xs text-slate-500">Giúp Thầy Toàn phát hiện ngay các phần kiến thức học sinh làm sai nhiều để giảng lại</p>
+            </div>
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-md">
+              {filteredAttempts.length} bài thi được phân tích
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {(() => {
+              const targetExam = exams.find(e => e.id === selectedExamId);
+              if (!targetExam || !targetExam.questions) return null;
+
+              return targetExam.questions.map((q, qIdx) => {
+                let totalAnsweredThisQ = 0;
+                let correctCount = 0;
+
+                filteredAttempts.forEach(att => {
+                  const qRes = att.questionResults?.find(r => r.questionId === q.id);
+                  if (qRes) {
+                    totalAnsweredThisQ++;
+                    if (qRes.isCorrect) correctCount++;
+                  }
+                });
+
+                const correctRate = totalAnsweredThisQ > 0 ? Math.round((correctCount / totalAnsweredThisQ) * 100) : 0;
+                const wrongRate = 100 - correctRate;
+                const isHard = wrongRate >= 60;
+                const isEasy = correctRate >= 80;
+
+                return (
+                  <div key={q.id} className={`p-4 rounded-xl border transition-all space-y-2 ${
+                    isHard ? 'bg-rose-50/60 border-rose-200' : isEasy ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800">Câu {qIdx + 1} ({q.code || 'TN'})</span>
+                      <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                        isHard ? 'bg-rose-200 text-rose-800' : isEasy ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
+                      }`}>
+                        {isHard ? 'Tỷ lệ sai cao' : isEasy ? 'Nắm vững' : 'Trung bình'}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-700 line-clamp-2 font-medium" title={q.content}>
+                      {q.content}
+                    </p>
+
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500">Đúng: <strong className="text-emerald-700">{correctRate}%</strong></span>
+                      <span className="text-slate-500">Sai: <strong className={isHard ? 'text-rose-700' : 'text-slate-700'}>{wrongRate}%</strong></span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
