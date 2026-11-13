@@ -8,6 +8,7 @@ import {
   LessonMaterial 
 } from '../types';
 import { db, auth } from '../firebase';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { 
   doc, 
   setDoc, 
@@ -28,7 +29,6 @@ import {
   INITIAL_NOTIFICATIONS
 } from '../data/mockData';
 import { getCachedLessons, getPublicLessons, importLessonsBackup, Lesson, LESSONS_CACHE_KEY } from './lessonService';
-import { SupabaseService } from './supabaseService';
 
 // Constants
 export const DEFAULT_SITE_LOGO = '/assets/aistudio/LOGO_WEB_05e2bec9.jpg';
@@ -45,8 +45,56 @@ const CACHE_KEYS = {
   materials: 'thcs_cache_materials_v2',
   notifications: 'thcs_cache_notifications_v2',
 };
+const PENDING_ATTEMPT_IDS_KEY = 'thcs_pending_attempt_ids_v1';
 
 let firestoreQuotaExceeded = false;
+
+function readPendingAttemptIds(): string[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(PENDING_ATTEMPT_IDS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingAttemptIds(ids: string[]): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(PENDING_ATTEMPT_IDS_KEY, JSON.stringify(Array.from(new Set(ids))));
+  } catch {
+    // ignore
+  }
+}
+
+function markAttemptPending(id: string): void {
+  if (!id) return;
+  const ids = readPendingAttemptIds();
+  if (!ids.includes(id)) {
+    writePendingAttemptIds([...ids, id]);
+  }
+}
+
+function unmarkAttemptPending(id: string): void {
+  if (!id) return;
+  const ids = readPendingAttemptIds();
+  if (ids.includes(id)) {
+    writePendingAttemptIds(ids.filter((x) => x !== id));
+  }
+}
+
+function mergeById<T extends { id?: string }>(primary: T[], secondary: T[]): T[] {
+  const map = new Map<string, T>();
+  secondary.forEach((item) => {
+    if (item && item.id) map.set(item.id, item);
+  });
+  primary.forEach((item) => {
+    if (item && item.id) map.set(item.id, item);
+  });
+  return Array.from(map.values());
+}
 
 function readCache<T>(key: string, fallback: T): T {
   if (typeof localStorage === 'undefined') return fallback;
@@ -68,6 +116,39 @@ function writeCache<T>(key: string, data: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
+    // Khi có >600 học sinh và hàng nghìn bài nộp vượt 5MB localStorage, giữ nguyên các bài chưa đồng bộ + thu gọn bản lưu tạm
+    if (key === CACHE_KEYS.attempts && Array.isArray(data)) {
+      try {
+        const pendingSet = new Set(readPendingAttemptIds());
+        const pendingItems = data.filter((a: any) => a?.id && pendingSet.has(a.id));
+        const otherCompact = data
+          .filter((a: any) => a?.id && !pendingSet.has(a.id))
+          .slice(0, 200)
+          .map((a: any) => {
+            if (!Array.isArray(a.questionResults)) return a;
+            return {
+              ...a,
+              questionResults: a.questionResults.map((qr: any) => ({
+                ...qr,
+                options: undefined,
+                explanation: undefined,
+              })),
+            };
+          });
+        localStorage.setItem(key, JSON.stringify([...pendingItems, ...otherCompact]));
+        return;
+      } catch {
+        // Fallback tối thiểu: chỉ giữ bài nộp chưa đẩy lên cloud
+        try {
+          const pendingSet = new Set(readPendingAttemptIds());
+          const pendingItems = data.filter((a: any) => a?.id && pendingSet.has(a.id));
+          localStorage.setItem(key, JSON.stringify(pendingItems));
+          return;
+        } catch {
+          // ignore
+        }
+      }
+    }
     console.warn(`Không thể ghi cache cục bộ (${key}):`, e);
   }
 }
@@ -217,95 +298,11 @@ export const StorageService = {
     }
   },
 
-  // --- Single-shot Parallel Sync from Supabase (PostgreSQL) ---
-  async syncAllFromSupabase(): Promise<{
-    users: User[];
-    questions: Question[];
-    exams: Exam[];
-    attempts: ExamAttempt[];
-    news: NewsArticle[];
-    materials: LessonMaterial[];
-    notifications: NotificationItem[];
-    lessons: Lesson[];
-  } | null> {
-    if (!SupabaseService.isConfigured()) return null;
-    try {
-      const remote = await SupabaseService.fetchDatabase();
-      if (!remote) return null;
 
-      const isRemotePopulated = Array.isArray(remote.users) && remote.users.length > 0;
-
-      const users = mergeBuiltInUsers(
-        isRemotePopulated ? remote.users : this.getCachedUsers()
-      );
-      const questions =
-        isRemotePopulated || (Array.isArray(remote.questions) && remote.questions.length > 0)
-          ? remote.questions
-          : this.getCachedQuestions();
-      const exams =
-        isRemotePopulated || (Array.isArray(remote.exams) && remote.exams.length > 0)
-          ? remote.exams
-          : this.getCachedExams();
-      const attempts =
-        isRemotePopulated || (Array.isArray(remote.attempts) && remote.attempts.length > 0)
-          ? remote.attempts
-          : this.getCachedAttempts();
-      const news = (
-        isRemotePopulated || (Array.isArray(remote.news) && remote.news.length > 0)
-          ? remote.news
-          : this.getCachedNews()
-      ).map(sanitizeNews);
-      const materials =
-        isRemotePopulated || (Array.isArray(remote.materials) && remote.materials.length > 0)
-          ? remote.materials
-          : this.getCachedMaterials();
-      const notifications = (
-        Array.isArray(remote.notifications) && remote.notifications.length > 0
-          ? remote.notifications
-          : this.getCachedNotifications()
-      ).map(sanitizeNotification);
-      const lessons =
-        isRemotePopulated || (Array.isArray(remote.lessons) && remote.lessons.length > 0)
-          ? remote.lessons
-          : getCachedLessons();
-
-      writeCache(CACHE_KEYS.users, users);
-      writeCache(CACHE_KEYS.questions, questions);
-      writeCache(CACHE_KEYS.exams, exams);
-      writeCache(CACHE_KEYS.attempts, attempts);
-      writeCache(CACHE_KEYS.news, news);
-      writeCache(CACHE_KEYS.materials, materials);
-      writeCache(CACHE_KEYS.notifications, notifications);
-      if (typeof localStorage !== 'undefined') {
-        try {
-          localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(lessons));
-        } catch {
-          // ignore
-        }
-      }
-
-      firestoreQuotaExceeded = false;
-      this.markSyncFresh();
-      return { users, questions, exams, attempts, news, materials, notifications, lessons };
-    } catch (err) {
-      console.warn('[Supabase Fallback] syncAllFromSupabase failed:', err);
-      return null;
-    }
-  },
 
   // --- Users ---
+  // --- Users ---
   async getUsers(): Promise<User[]> {
-    if (SupabaseService.isConfigured()) {
-      try {
-        const fetched = (await SupabaseService.getCollection<User>('users')).map(sanitizeUser);
-        const merged = mergeBuiltInUsers(fetched.length > 0 ? fetched : readCache<User[]>(CACHE_KEYS.users, INITIAL_USERS));
-        writeCache(CACHE_KEYS.users, merged);
-        return merged;
-      } catch (error) {
-        console.warn('[Supabase Fallback] users:', error);
-        return this.getCachedUsers();
-      }
-    }
     try {
       const snapshot = await getDocs(collection(db, 'users'));
       const fetched = snapshot.docs.map(docSnap => sanitizeUser(docSnap.data() as User));
@@ -381,28 +378,6 @@ export const StorageService = {
       if (!localStorage.getItem(CACHE_KEYS.materials)) writeCache(CACHE_KEYS.materials, initialData.materials);
     }
 
-    // If Supabase PostgreSQL is active, seed Supabase once if empty and skip Firestore
-    if (SupabaseService.isConfigured()) {
-      try {
-        const existingUsers = await SupabaseService.getCollection<User>('users');
-        if (typeof sessionStorage !== 'undefined') {
-          sessionStorage.setItem('thcs_firestore_init_checked', '1');
-        }
-        if (existingUsers.length === 0) {
-          await SupabaseService.pushDatabase({
-            users: mergeBuiltInUsers(initialData.users),
-            questions: initialData.questions,
-            exams: initialData.exams,
-            news: initialData.news.map(sanitizeNews),
-            materials: initialData.materials
-          });
-        }
-      } catch (err) {
-        console.warn('[Supabase] Seed check warning:', err);
-      }
-      return;
-    }
-
     // Only attempt Firestore seed check once per session to conserve daily Firestore read quota
     if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('thcs_firestore_init_checked') === '1') {
       return;
@@ -451,15 +426,6 @@ export const StorageService = {
     const nextList = idx >= 0 ? currentList.map(u => (u.id === optimized.id ? optimized : u)) : [optimized, ...currentList];
     writeCache(CACHE_KEYS.users, nextList);
 
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.upsertItem('users', optimized);
-      } catch (error) {
-        console.warn('[Supabase] saveUser fallback:', error);
-      }
-      return optimized;
-    }
-
     try {
       const sanitized = cleanForFirestore(optimized);
       await setDoc(doc(db, 'users', user.id), sanitized);
@@ -469,6 +435,18 @@ export const StorageService = {
     return optimized;
   },
 
+  async saveUsersBulk(users: User[]): Promise<User[]> {
+    if (!Array.isArray(users) || users.length === 0) return [];
+    const optimizedList = await Promise.all(users.map((u) => optimizeUserPayload(sanitizeUser(u))));
+    const mergedList = mergeBuiltInUsers(mergeById(optimizedList, this.getCachedUsers()));
+    writeCache(CACHE_KEYS.users, mergedList);
+
+    await Promise.allSettled(
+      optimizedList.map((u) => setDoc(doc(db, 'users', u.id), cleanForFirestore(u)))
+    );
+    return optimizedList;
+  },
+
   async deleteUser(id: string): Promise<void> {
     if (id === PROTECTED_ADMIN_ID) {
       console.warn('Cannot delete protected admin user');
@@ -476,14 +454,6 @@ export const StorageService = {
     }
     const nextList = this.getCachedUsers().filter(u => u.id !== id);
     writeCache(CACHE_KEYS.users, nextList);
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.deleteItem('users', id);
-      } catch (error) {
-        console.warn('[Supabase] deleteUser fallback:', error);
-      }
-      return;
-    }
     try {
       await deleteDoc(doc(db, 'users', id));
     } catch (error) {
@@ -491,19 +461,16 @@ export const StorageService = {
     }
   },
 
+  async deleteUsersBulk(ids: string[]): Promise<void> {
+    const deletableIds = ids.filter((id) => id && id !== PROTECTED_ADMIN_ID);
+    if (deletableIds.length === 0) return;
+    const idSet = new Set(deletableIds);
+    writeCache(CACHE_KEYS.users, this.getCachedUsers().filter((u) => !idSet.has(u.id)));
+    await Promise.allSettled(deletableIds.map((id) => deleteDoc(doc(db, 'users', id))));
+  },
+
   // --- Questions ---
   async getQuestions(): Promise<Question[]> {
-    if (SupabaseService.isConfigured()) {
-      try {
-        const fetched = await SupabaseService.getCollection<Question>('questions');
-        const data = fetched.length > 0 ? fetched : this.getCachedQuestions();
-        writeCache(CACHE_KEYS.questions, data);
-        return data;
-      } catch (error) {
-        console.warn('[Supabase Fallback] questions:', error);
-        return this.getCachedQuestions();
-      }
-    }
     try {
       const snapshot = await getDocs(collection(db, 'questions'));
       const fetched = snapshot.docs.map(docSnap => docSnap.data() as Question);
@@ -523,15 +490,6 @@ export const StorageService = {
     const nextList = idx >= 0 ? currentList.map(q => (q.id === optimized.id ? optimized : q)) : [optimized, ...currentList];
     writeCache(CACHE_KEYS.questions, nextList);
 
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.upsertItem('questions', optimized);
-      } catch (error) {
-        console.warn('[Supabase] saveQuestion fallback:', error);
-      }
-      return optimized;
-    }
-
     try {
       const sanitized = cleanForFirestore(optimized);
       await setDoc(doc(db, 'questions', question.id), sanitized);
@@ -541,16 +499,20 @@ export const StorageService = {
     return optimized;
   },
 
+  async saveQuestionsBulk(questions: Question[]): Promise<Question[]> {
+    if (!Array.isArray(questions) || questions.length === 0) return [];
+    const optimizedList = questions.map((q) => optimizeQuestionPayload(q));
+    const mergedList = mergeById(optimizedList, this.getCachedQuestions());
+    writeCache(CACHE_KEYS.questions, mergedList);
+
+    await Promise.allSettled(
+      optimizedList.map((q) => setDoc(doc(db, 'questions', q.id), cleanForFirestore(q)))
+    );
+    return optimizedList;
+  },
+
   async deleteQuestion(id: string): Promise<void> {
     writeCache(CACHE_KEYS.questions, this.getCachedQuestions().filter(q => q.id !== id));
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.deleteItem('questions', id);
-      } catch (error) {
-        console.warn('[Supabase] deleteQuestion fallback:', error);
-      }
-      return;
-    }
     try {
       await deleteDoc(doc(db, 'questions', id));
     } catch (error) {
@@ -560,17 +522,6 @@ export const StorageService = {
 
   // --- Exams ---
   async getExams(): Promise<Exam[]> {
-    if (SupabaseService.isConfigured()) {
-      try {
-        const fetched = await SupabaseService.getCollection<Exam>('exams');
-        const data = fetched.length > 0 ? fetched : this.getCachedExams();
-        writeCache(CACHE_KEYS.exams, data);
-        return data;
-      } catch (error) {
-        console.warn('[Supabase Fallback] exams:', error);
-        return this.getCachedExams();
-      }
-    }
     try {
       const snapshot = await getDocs(collection(db, 'exams'));
       const fetched = snapshot.docs.map(docSnap => docSnap.data() as Exam);
@@ -589,15 +540,6 @@ export const StorageService = {
     const nextList = idx >= 0 ? currentList.map(e => (e.id === exam.id ? exam : e)) : [exam, ...currentList];
     writeCache(CACHE_KEYS.exams, nextList);
 
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.upsertItem('exams', exam);
-      } catch (error) {
-        console.warn('[Supabase] saveExam fallback:', error);
-      }
-      return exam;
-    }
-
     try {
       const sanitized = cleanForFirestore(exam);
       await setDoc(doc(db, 'exams', exam.id), sanitized);
@@ -609,14 +551,6 @@ export const StorageService = {
 
   async deleteExam(id: string): Promise<void> {
     writeCache(CACHE_KEYS.exams, this.getCachedExams().filter(e => e.id !== id));
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.deleteItem('exams', id);
-      } catch (error) {
-        console.warn('[Supabase] deleteExam fallback:', error);
-      }
-      return;
-    }
     try {
       await deleteDoc(doc(db, 'exams', id));
     } catch (error) {
@@ -626,16 +560,6 @@ export const StorageService = {
 
   // --- Attempts ---
   async getAttempts(): Promise<ExamAttempt[]> {
-    if (SupabaseService.isConfigured()) {
-      try {
-        const fetched = await SupabaseService.getCollection<ExamAttempt>('attempts');
-        writeCache(CACHE_KEYS.attempts, fetched);
-        return fetched;
-      } catch (error) {
-        console.warn('[Supabase Fallback] attempts:', error);
-        return this.getCachedAttempts();
-      }
-    }
     try {
       const snapshot = await getDocs(query(collection(db, 'attempts'), orderBy('submittedAt', 'desc')));
       const fetched = snapshot.docs.map(docSnap => docSnap.data() as ExamAttempt);
@@ -652,35 +576,55 @@ export const StorageService = {
     const idx = currentList.findIndex(a => a.id === attempt.id);
     const nextList = idx >= 0 ? currentList.map(a => (a.id === attempt.id ? attempt : a)) : [attempt, ...currentList];
     writeCache(CACHE_KEYS.attempts, nextList);
-
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.upsertItem('attempts', attempt);
-      } catch (error) {
-        console.warn('[Supabase] saveAttempt fallback:', error);
-      }
-      return attempt;
-    }
+    markAttemptPending(attempt.id);
 
     try {
       const sanitized = cleanForFirestore(attempt);
       await setDoc(doc(db, 'attempts', attempt.id), sanitized);
+      unmarkAttemptPending(attempt.id);
     } catch (error) {
       logFirestoreWarning(error, OperationType.WRITE, `attempts/${attempt.id}`);
     }
     return attempt;
   },
 
-  async deleteAttempt(id: string): Promise<void> {
-    writeCache(CACHE_KEYS.attempts, this.getCachedAttempts().filter(a => a.id !== id));
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.deleteItem('attempts', id);
-      } catch (error) {
-        console.warn('[Supabase] deleteAttempt fallback:', error);
-      }
-      return;
+  isAttemptPending(id: string): boolean {
+    return readPendingAttemptIds().includes(id);
+  },
+
+  getPendingAttemptCount(): number {
+    return readPendingAttemptIds().length;
+  },
+
+  async flushPendingAttempts(): Promise<{ flushedCount: number; remainingCount: number }> {
+    const pendingIds = readPendingAttemptIds();
+    if (pendingIds.length === 0) return { flushedCount: 0, remainingCount: 0 };
+
+    const pendingSet = new Set(pendingIds);
+    const cached = this.getCachedAttempts();
+    const toUpload = cached.filter((a) => a?.id && pendingSet.has(a.id));
+    if (toUpload.length === 0) {
+      writePendingAttemptIds([]);
+      return { flushedCount: 0, remainingCount: 0 };
     }
+
+    let flushed = 0;
+    const stillPending: string[] = [];
+    for (const item of toUpload) {
+      try {
+        await setDoc(doc(db, 'attempts', item.id), cleanForFirestore(item));
+        flushed++;
+      } catch {
+        stillPending.push(item.id);
+      }
+    }
+    writePendingAttemptIds(stillPending);
+    return { flushedCount: flushed, remainingCount: stillPending.length };
+  },
+
+  async deleteAttempt(id: string): Promise<void> {
+    unmarkAttemptPending(id);
+    writeCache(CACHE_KEYS.attempts, this.getCachedAttempts().filter(a => a.id !== id));
     try {
       await deleteDoc(doc(db, 'attempts', id));
     } catch (error) {
@@ -688,19 +632,17 @@ export const StorageService = {
     }
   },
 
+  async deleteAttemptsBulk(ids: string[]): Promise<void> {
+    const cleanIds = ids.filter(Boolean);
+    if (cleanIds.length === 0) return;
+    const idSet = new Set(cleanIds);
+    writePendingAttemptIds(readPendingAttemptIds().filter((id) => !idSet.has(id)));
+    writeCache(CACHE_KEYS.attempts, this.getCachedAttempts().filter((a) => !idSet.has(a.id)));
+    await Promise.allSettled(cleanIds.map((id) => deleteDoc(doc(db, 'attempts', id))));
+  },
+
   // --- News ---
   async getNews(): Promise<NewsArticle[]> {
-    if (SupabaseService.isConfigured()) {
-      try {
-        const fetched = (await SupabaseService.getCollection<NewsArticle>('news')).map(sanitizeNews);
-        const data = fetched.length > 0 ? fetched : this.getCachedNews();
-        writeCache(CACHE_KEYS.news, data);
-        return data;
-      } catch (error) {
-        console.warn('[Supabase Fallback] news:', error);
-        return this.getCachedNews();
-      }
-    }
     try {
       const snapshot = await getDocs(query(collection(db, 'news'), orderBy('publishedAt', 'desc')));
       const fetched = snapshot.docs.map(docSnap => sanitizeNews(docSnap.data() as NewsArticle));
@@ -720,15 +662,6 @@ export const StorageService = {
     const nextList = idx >= 0 ? currentList.map(n => (n.id === cleanArticle.id ? cleanArticle : n)) : [cleanArticle, ...currentList];
     writeCache(CACHE_KEYS.news, nextList);
 
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.upsertItem('news', cleanArticle);
-      } catch (error) {
-        console.warn('[Supabase] saveNews fallback:', error);
-      }
-      return cleanArticle;
-    }
-
     try {
       const sanitized = cleanForFirestore(cleanArticle);
       await setDoc(doc(db, 'news', article.id), sanitized);
@@ -740,14 +673,6 @@ export const StorageService = {
 
   async deleteNews(id: string): Promise<void> {
     writeCache(CACHE_KEYS.news, this.getCachedNews().filter(n => n.id !== id));
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.deleteItem('news', id);
-      } catch (error) {
-        console.warn('[Supabase] deleteNews fallback:', error);
-      }
-      return;
-    }
     try {
       await deleteDoc(doc(db, 'news', id));
     } catch (error) {
@@ -757,17 +682,6 @@ export const StorageService = {
 
   // --- Materials ---
   async getMaterials(): Promise<LessonMaterial[]> {
-    if (SupabaseService.isConfigured()) {
-      try {
-        const fetched = await SupabaseService.getCollection<LessonMaterial>('materials');
-        const data = fetched.length > 0 ? fetched : this.getCachedMaterials();
-        writeCache(CACHE_KEYS.materials, data);
-        return data;
-      } catch (error) {
-        console.warn('[Supabase Fallback] materials:', error);
-        return this.getCachedMaterials();
-      }
-    }
     try {
       const snapshot = await getDocs(collection(db, 'materials'));
       const fetched = snapshot.docs.map(docSnap => docSnap.data() as LessonMaterial);
@@ -787,25 +701,14 @@ export const StorageService = {
     const nextList = idx >= 0 ? currentList.map(m => (m.id === optimized.id ? optimized : m)) : [optimized, ...currentList];
     writeCache(CACHE_KEYS.materials, nextList);
 
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.upsertItem('materials', optimized);
-      } catch (error) {
-        console.warn('[Supabase] saveMaterial fallback:', error);
-      }
-      return optimized;
-    }
-
     try {
       const sanitized = cleanForFirestore(optimized);
       if (sanitized.fileUrl && typeof sanitized.fileUrl === 'string' && sanitized.fileUrl.length > 350000) {
-        console.warn('Tệp có dung lượng base64 lớn (>350KB), nén/lược bỏ fileUrl khi đồng bộ Firestore để dữ liệu luôn nhẹ.');
         delete sanitized.fileUrl;
       }
       await setDoc(doc(db, 'materials', material.id), sanitized);
       return optimized;
     } catch (error) {
-      console.warn('Thử lại lưu bài giảng không kèm fileUrl lớn...', error);
       try {
         const safePayload = cleanForFirestore({
           ...material,
@@ -822,14 +725,6 @@ export const StorageService = {
 
   async deleteMaterial(id: string): Promise<void> {
     writeCache(CACHE_KEYS.materials, this.getCachedMaterials().filter(m => m.id !== id));
-    if (SupabaseService.isConfigured()) {
-      try {
-        await SupabaseService.deleteItem('materials', id);
-      } catch (error) {
-        console.warn('[Supabase] deleteMaterial fallback:', error);
-      }
-      return;
-    }
     try {
       await deleteDoc(doc(db, 'materials', id));
     } catch (error) {
@@ -852,16 +747,6 @@ export const StorageService = {
 
   // --- Notifications ---
   async getNotifications(): Promise<NotificationItem[]> {
-    if (SupabaseService.isConfigured()) {
-      try {
-        const fetched = (await SupabaseService.getCollection<NotificationItem>('notifications')).map(sanitizeNotification);
-        const data = fetched.length > 0 ? fetched : this.getCachedNotifications();
-        writeCache(CACHE_KEYS.notifications, data);
-        return data;
-      } catch {
-        return this.getCachedNotifications();
-      }
-    }
     try {
       const snapshot = await getDocs(query(collection(db, 'notifications'), orderBy('timestamp', 'desc')));
       const fetched = snapshot.docs.map(docSnap => sanitizeNotification(docSnap.data() as NotificationItem));
@@ -882,6 +767,7 @@ export const StorageService = {
     onAttempts?: (data: ExamAttempt[]) => void;
     onQuestions?: (data: Question[]) => void;
     onNotifications?: (data: NotificationItem[]) => void;
+    onLessons?: (data: Lesson[]) => void;
   }) {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       if (!snap.empty) {
@@ -937,6 +823,18 @@ export const StorageService = {
       }
     }, (err) => logFirestoreWarning(err, OperationType.LIST, 'notifications/realtime'));
 
+    const unsubLessons = onSnapshot(query(collection(db, 'lessons'), orderBy('createdAt', 'desc')), (snap) => {
+      if (!snap.empty) {
+        const data = snap.docs.map(d => d.data() as Lesson);
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(data));
+          } catch {}
+        }
+        callbacks.onLessons?.(data);
+      }
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'lessons/realtime'));
+
     return () => {
       unsubUsers();
       unsubExams();
@@ -945,6 +843,7 @@ export const StorageService = {
       unsubAttempts();
       unsubQuestions();
       unsubNotifs();
+      unsubLessons();
     };
   },
 
@@ -994,88 +893,101 @@ export const StorageService = {
     if (!json || !json.trim()) return false;
     try {
       const parsed = JSON.parse(json);
-      const useSupabase = SupabaseService.isConfigured();
       const promises: Promise<any>[] = [];
+      const mergeIfPushing = pushToCloud;
 
       if (Array.isArray(parsed.users)) {
-        const merged = mergeBuiltInUsers(parsed.users);
+        const merged = mergeBuiltInUsers(
+          mergeIfPushing ? mergeById(parsed.users, this.getCachedUsers()) : parsed.users
+        );
         writeCache(CACHE_KEYS.users, merged);
-        if (!useSupabase && pushToCloud) {
+        if (pushToCloud) {
           merged.forEach((u: User) => {
             if (u.id) promises.push(setDoc(doc(db, 'users', u.id), cleanForFirestore(u)).catch(() => {}));
           });
         }
       }
       if (Array.isArray(parsed.questions)) {
-        writeCache(CACHE_KEYS.questions, parsed.questions);
-        if (!useSupabase && pushToCloud) {
-          parsed.questions.forEach((q: Question) => {
+        const nextQuestions = mergeIfPushing
+          ? mergeById(parsed.questions, this.getCachedQuestions())
+          : parsed.questions;
+        writeCache(CACHE_KEYS.questions, nextQuestions);
+        if (pushToCloud) {
+          nextQuestions.forEach((q: Question) => {
             if (q.id) promises.push(setDoc(doc(db, 'questions', q.id), cleanForFirestore(q)).catch(() => {}));
           });
         }
       }
       if (Array.isArray(parsed.exams)) {
-        writeCache(CACHE_KEYS.exams, parsed.exams);
-        if (!useSupabase && pushToCloud) {
-          parsed.exams.forEach((e: Exam) => {
+        const nextExams = mergeIfPushing
+          ? mergeById(parsed.exams, this.getCachedExams())
+          : parsed.exams;
+        writeCache(CACHE_KEYS.exams, nextExams);
+        if (pushToCloud) {
+          nextExams.forEach((e: Exam) => {
             if (e.id) promises.push(setDoc(doc(db, 'exams', e.id), cleanForFirestore(e)).catch(() => {}));
           });
         }
       }
       if (Array.isArray(parsed.news)) {
-        const cleanNews = parsed.news.map(sanitizeNews);
+        const cleanNews = (
+          mergeIfPushing ? mergeById(parsed.news, this.getCachedNews()) : parsed.news
+        ).map(sanitizeNews);
         writeCache(CACHE_KEYS.news, cleanNews);
-        if (!useSupabase && pushToCloud) {
+        if (pushToCloud) {
           cleanNews.forEach((n: NewsArticle) => {
             if (n.id) promises.push(setDoc(doc(db, 'news', n.id), cleanForFirestore(n)).catch(() => {}));
           });
         }
       }
       if (Array.isArray(parsed.materials)) {
-        writeCache(CACHE_KEYS.materials, parsed.materials);
-        if (!useSupabase && pushToCloud) {
-          parsed.materials.forEach((m: LessonMaterial) => {
+        const nextMaterials = mergeIfPushing
+          ? mergeById(parsed.materials, this.getCachedMaterials())
+          : parsed.materials;
+        writeCache(CACHE_KEYS.materials, nextMaterials);
+        if (pushToCloud) {
+          nextMaterials.forEach((m: LessonMaterial) => {
             if (m.id) promises.push(setDoc(doc(db, 'materials', m.id), cleanForFirestore(m)).catch(() => {}));
           });
         }
       }
       if (Array.isArray(parsed.attempts)) {
-        writeCache(CACHE_KEYS.attempts, parsed.attempts);
-        if (!useSupabase && pushToCloud) {
-          parsed.attempts.forEach((a: ExamAttempt) => {
+        const nextAttempts = mergeIfPushing
+          ? mergeById(parsed.attempts, this.getCachedAttempts())
+          : parsed.attempts;
+        writeCache(CACHE_KEYS.attempts, nextAttempts);
+        if (pushToCloud) {
+          nextAttempts.forEach((a: ExamAttempt) => {
             if (a.id) promises.push(setDoc(doc(db, 'attempts', a.id), cleanForFirestore(a)).catch(() => {}));
           });
         }
       }
       if (Array.isArray(parsed.notifications)) {
-        const cleanNotifs = parsed.notifications.map(sanitizeNotification);
+        const cleanNotifs = (
+          mergeIfPushing
+            ? mergeById(parsed.notifications, this.getCachedNotifications())
+            : parsed.notifications
+        ).map(sanitizeNotification);
         writeCache(CACHE_KEYS.notifications, cleanNotifs);
       }
       if (Array.isArray(parsed.lessons)) {
-        if (useSupabase && !pushToCloud && typeof localStorage !== 'undefined') {
-          try {
-            localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(parsed.lessons));
-          } catch {
-            // ignore
-          }
-        } else if (pushToCloud) {
-          promises.push(importLessonsBackup(parsed.lessons as Lesson[]).catch(() => {}));
+        const nextLessons = mergeIfPushing
+          ? mergeById(parsed.lessons, getCachedLessons())
+          : parsed.lessons;
+        if (pushToCloud) {
+          promises.push(importLessonsBackup(nextLessons as Lesson[]).catch(() => {}));
         }
       }
 
-      if (useSupabase && pushToCloud) {
-        await SupabaseService.pushDatabase(this.getDatabasePayload()).catch((err) => {
-          console.warn('[Supabase] importBackup push failed:', err);
-        });
-      } else {
-        await Promise.allSettled(promises);
-      }
+      await Promise.allSettled(promises);
       return true;
     } catch (e) {
       console.error('Error importing backup:', e);
       return false;
     }
   },
+
+
 
   getDatabasePayload() {
     return {

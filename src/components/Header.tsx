@@ -30,11 +30,11 @@ import {
   Image as ImageIcon,
   Camera,
   Trash2,
-  Check
+  Check,
+  ExternalLink
 } from 'lucide-react';
 import { User, NotificationItem, NavigationTab } from '../types';
 import { isTeacherToanOrAdmin } from '../utils/authUtils';
-import { SupabaseService } from '../services/supabaseService';
 import { StorageService } from '../services/storageService';
 
 interface HeaderProps {
@@ -50,11 +50,13 @@ interface HeaderProps {
   onImportData: (json: string) => void;
   onBackupToDrive?: () => void;
   onRestoreFromDrive?: () => void;
-  onOpenSupabaseSync?: () => void;
+
   onOpenLoginModal?: () => void;
   onOpenChangePasswordModal?: () => void;
   onLogout?: () => void;
   dbConnected?: boolean;
+  isQuotaExceeded?: boolean;
+  onRetryConnect?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -70,16 +72,18 @@ export const Header: React.FC<HeaderProps> = ({
   onImportData,
   onBackupToDrive,
   onRestoreFromDrive,
-  onOpenSupabaseSync,
   onOpenLoginModal,
   onOpenChangePasswordModal,
   onLogout,
-  dbConnected
+  dbConnected,
+  isQuotaExceeded,
+  onRetryConnect
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showCloudStatusModal, setShowCloudStatusModal] = useState(false);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifMenuRef = useRef<HTMLDivElement>(null);
@@ -104,50 +108,6 @@ export const Header: React.FC<HeaderProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, []);
-
-  const [syncState, setSyncState] = useState<{
-    status: 'idle' | 'syncing' | 'connected' | 'error';
-    isSyncing: boolean;
-    autoSync: boolean;
-    hasSupabase: boolean;
-  }>(() => {
-    const cfg = SupabaseService.getConfig();
-    return {
-      status: cfg.status,
-      isSyncing: cfg.status === 'syncing',
-      autoSync: cfg.autoSync && cfg.enabled,
-      hasSupabase: !!(cfg.projectUrl && cfg.anonKey),
-    };
-  });
-
-  useEffect(() => {
-    const handleSyncStatus = (e: any) => {
-      const cfg = SupabaseService.getConfig();
-      setSyncState({
-        status: cfg.status,
-        isSyncing: e?.detail?.status === 'syncing' || cfg.status === 'syncing',
-        autoSync: cfg.autoSync && cfg.enabled,
-        hasSupabase: !!(cfg.projectUrl && cfg.anonKey),
-      });
-    };
-
-    const handleConfigUpdated = (e: any) => {
-      const cfg = e.detail || SupabaseService.getConfig();
-      setSyncState({
-        status: cfg.status,
-        isSyncing: cfg.status === 'syncing',
-        autoSync: cfg.autoSync && cfg.enabled,
-        hasSupabase: !!(cfg.projectUrl && cfg.anonKey),
-      });
-    };
-
-    window.addEventListener('thcs_sync_status_changed', handleSyncStatus);
-    window.addEventListener('thcs_supabase_config_updated', handleConfigUpdated);
-    return () => {
-      window.removeEventListener('thcs_sync_status_changed', handleSyncStatus);
-      window.removeEventListener('thcs_supabase_config_updated', handleConfigUpdated);
     };
   }, []);
 
@@ -418,14 +378,33 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Real-time Connection Status (Visible for Admins) */}
             {isAuthorizedToManageStudents && (
-              <div className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                dbConnected 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-              }`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${dbConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-                <span>{dbConnected ? 'Cloud Connected' : 'Disconnected'}</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowCloudStatusModal(true)}
+                className={`hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border cursor-pointer transition-all hover:scale-102 ${
+                  dbConnected 
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25' 
+                    : isQuotaExceeded
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/35 hover:bg-amber-500/30'
+                    : 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
+                }`}
+                title="Nhấn để xem chi tiết kết nối Cloud Firebase"
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  dbConnected 
+                    ? 'bg-emerald-400 animate-pulse' 
+                    : isQuotaExceeded 
+                    ? 'bg-amber-400 animate-ping' 
+                    : 'bg-rose-400'
+                }`} />
+                <span>
+                  {dbConnected 
+                    ? 'Cloud Connected' 
+                    : isQuotaExceeded 
+                    ? 'Firebase Quota (Cache An Toàn)' 
+                    : 'Disconnected'}
+                </span>
+              </button>
             )}
 
             {/* Notification Bell */}
@@ -506,24 +485,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>Cập nhật Logo Website</span>
                       </button>
 
-                      {onOpenSupabaseSync && (
-                        <button
-                          onClick={() => { onOpenSupabaseSync(); setShowSettingsMenu(false); }}
-                          className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-emerald-50 flex items-center justify-between text-emerald-700 font-semibold cursor-pointer"
-                        >
-                          <span className="flex items-center space-x-2">
-                            <Database className="w-4 h-4 text-emerald-600" />
-                            <span>CSDL Supabase (PostgreSQL)</span>
-                          </span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                            SupabaseService.isConfigured()
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {SupabaseService.isConfigured() ? 'Đã bật' : 'Cài đặt'}
-                          </span>
-                        </button>
-                      )}
+
 
                       {onBackupToDrive && (
                         <button
@@ -884,6 +846,127 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 Xác nhận khôi phục
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Trạng thái kết nối Firebase Cloud */}
+      {showCloudStatusModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setShowCloudStatusModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 text-slate-800 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Trạng Thái Kết Nối Firebase Cloud</h3>
+                  <p className="text-xs text-slate-500">Đồng bộ dữ liệu thời gian thực (Real-time Firestore)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCloudStatusModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Status overview */}
+            <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+              dbConnected
+                ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                : isQuotaExceeded
+                ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                : 'bg-rose-50/70 border-rose-200 text-rose-900'
+            }`}>
+              <div className="mt-0.5 shrink-0">
+                {dbConnected ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                ) : isQuotaExceeded ? (
+                  <RefreshCw className="w-5 h-5 text-amber-600" />
+                ) : (
+                  <Database className="w-5 h-5 text-rose-600" />
+                )}
+              </div>
+              <div className="space-y-1 text-xs">
+                <h4 className="font-bold text-sm">
+                  {dbConnected 
+                    ? 'Cloud Đang Kết Nối Hoạt Động (Trực Tuyến)' 
+                    : isQuotaExceeded 
+                    ? 'Hạn Mức Đọc Miễn Phí Tạm Chạm Mốc (Đã Kích Hoạt Cache An Toàn)' 
+                    : 'Ngoại Tuyến / Đang Ngắt Kết Nối'}
+                </h4>
+                <p className="leading-relaxed">
+                  {dbConnected ? (
+                    'Hệ thống đang kết nối trực tiếp với Firebase Firestore. Mọi thay đổi về đề thi, tài khoản, câu hỏi và bài làm sẽ tự động đồng bộ tức thì trên tất cả trình duyệt và thiết bị.'
+                  ) : isQuotaExceeded ? (
+                    'Firebase Firestore tạm vượt hạn mức đọc miễn phí trong ngày (50.000 lượt đọc/ngày). Cơ chế bảo vệ dữ liệu cục bộ đang tự động lưu trữ và bảo toàn 100% tài khoản, bài làm và đề thi trên máy. Hạn mức sẽ tự động được làm mới vào 15:00 hàng ngày (giờ VN).'
+                  ) : (
+                    'Hệ thống chưa kết nối được với máy chủ Firebase. Dữ liệu đang được lưu tạm trên trình duyệt của bạn.'
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Technical details info */}
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Dự án Firebase (Project ID):</span>
+                <span className="font-mono font-bold text-slate-800">euphoric-market-03rp2</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Cơ sở dữ liệu Firestore:</span>
+                <span className="font-mono text-[11px] font-semibold text-slate-700">ai-studio-cngthngtinkhotht-...</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-500 font-medium">Cơ chế đồng bộ:</span>
+                <span className="font-semibold text-blue-700">onSnapshot (Tự động cập nhật thời gian thực)</span>
+              </div>
+            </div>
+
+            {/* Links and action buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+              <a
+                href="https://console.firebase.google.com/project/euphoric-market-03rp2/firestore/databases/ai-studio-cngthngtinkhotht-cd1651c7-f107-4c64-88bc-b3027939b0a1/data?openUpgradeDialog=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Mở Firebase Console</span>
+              </a>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                {onRetryConnect && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRetryConnect();
+                      setShowCloudStatusModal(false);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Thử kết nối lại</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCloudStatusModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>

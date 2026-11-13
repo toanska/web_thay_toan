@@ -21,7 +21,6 @@ import {
   UploadTask 
 } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
-import { SupabaseService } from './supabaseService';
 
 export interface Lesson {
   id: string;
@@ -89,8 +88,6 @@ export async function uploadLessonFile(
   const timestamp = Date.now();
   const storagePath = `lessons/${metadata.visibility}/khoi-${metadata.grade}/${metadata.subject}/${timestamp}_${cleanName}`;
   
-  console.log('Attempting upload to:', storagePath, 'File:', file.name, file.size, file.type);
-  
   const storageRef = ref(storage, storagePath);
   const uploadTask = uploadBytesResumable(storageRef, file, {
     contentType: file.type || 'application/octet-stream'
@@ -105,7 +102,6 @@ export async function uploadLessonFile(
       'state_changed',
       (snapshot) => {
         const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-        console.log('Upload progress:', progress, '%');
         onProgress(progress);
       },
       (error) => {
@@ -129,7 +125,7 @@ export async function uploadLessonFile(
 }
 
 /**
- * Create a new lesson document in Supabase PostgreSQL (or Firestore fallback).
+ * Create a new lesson document in Firebase Firestore.
  */
 export async function createLesson(lessonData: Omit<Lesson, 'id' | 'views' | 'createdAt' | 'createdBy'>): Promise<string> {
   const lessonId = `lesson-${Date.now()}`;
@@ -147,11 +143,6 @@ export async function createLesson(lessonData: Omit<Lesson, 'id' | 'views' | 'cr
   if (typeof localStorage !== 'undefined') {
     const updated = [localLesson, ...getCachedLessons().filter(l => l.id !== lessonId)];
     try { localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(updated)); } catch {}
-  }
-
-  if (SupabaseService.isConfigured()) {
-    await SupabaseService.upsertItem('lessons', localLesson);
-    return lessonId;
   }
 
   const newLesson: Lesson = {
@@ -176,22 +167,6 @@ export async function updateLesson(lessonId: string, newData: Partial<Lesson>, o
     }
   }
 
-  if (SupabaseService.isConfigured()) {
-    const cached = getCachedLessons();
-    const existing = cached.find(l => l.id === lessonId);
-    const merged: Lesson = {
-      ...(existing || ({ id: lessonId, views: 0, createdAt: new Date().toISOString(), createdBy: 'teacher-toan' } as any)),
-      ...newData,
-      id: lessonId,
-    };
-    const nextList = existing ? cached.map(l => (l.id === lessonId ? merged : l)) : [merged, ...cached];
-    if (typeof localStorage !== 'undefined') {
-      try { localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(nextList)); } catch {}
-    }
-    await SupabaseService.upsertItem('lessons', merged);
-    return;
-  }
-
   const docRef = doc(db, 'lessons', lessonId);
   await updateDoc(docRef, {
     ...newData,
@@ -200,7 +175,7 @@ export async function updateLesson(lessonId: string, newData: Partial<Lesson>, o
 }
 
 /**
- * Delete a lesson from Supabase PostgreSQL or Firestore and its associated Storage file.
+ * Delete a lesson from Firestore and its associated Storage file.
  */
 export async function deleteLesson(lessonId: string, storagePath?: string | null): Promise<void> {
   if (typeof localStorage !== 'undefined') {
@@ -215,11 +190,6 @@ export async function deleteLesson(lessonId: string, storagePath?: string | null
     } catch (e) {
       console.warn('Không tìm thấy file trên Storage hoặc đã bị xóa:', e);
     }
-  }
-
-  if (SupabaseService.isConfigured()) {
-    await SupabaseService.deleteItem('lessons', lessonId);
-    return;
   }
 
   await deleteDoc(doc(db, 'lessons', lessonId));
@@ -246,12 +216,6 @@ export async function importLessonsBackup(lessons: Lesson[]): Promise<void> {
       // ignore quota
     }
   }
-  if (SupabaseService.isConfigured()) {
-    await Promise.allSettled(
-      lessons.filter(l => l && l.id).map(l => SupabaseService.upsertItem('lessons', l))
-    );
-    return;
-  }
   await Promise.allSettled(
     lessons.filter(l => l && l.id).map(l => setDoc(doc(db, 'lessons', l.id), l))
   );
@@ -261,27 +225,6 @@ export async function importLessonsBackup(lessons: Lesson[]): Promise<void> {
  * Get all lessons with optional filtering.
  */
 export async function getPublicLessons(filters?: { grade?: string; subject?: string; semester?: string }): Promise<Lesson[]> {
-  if (SupabaseService.isConfigured()) {
-    try {
-      let lessons = await SupabaseService.getCollection<Lesson>('lessons');
-      if (typeof localStorage !== 'undefined') {
-        try { localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(lessons)); } catch {}
-      }
-      if (filters?.grade && filters.grade !== 'all') {
-        lessons = lessons.filter(l => l.grade === filters.grade);
-      }
-      if (filters?.subject && filters.subject !== 'all') {
-        lessons = lessons.filter(l => l.subject === filters.subject);
-      }
-      if (filters?.semester && filters.semester !== 'all') {
-        lessons = lessons.filter(l => l.semester === filters.semester);
-      }
-      return lessons;
-    } catch (error) {
-      console.warn('[Supabase Fallback] lessons:', error);
-    }
-  }
-
   try {
     let q = query(collection(db, 'lessons'), orderBy('createdAt', 'desc'));
     
@@ -333,10 +276,6 @@ export async function incrementLessonView(lessonId: string): Promise<void> {
 
   try {
     sessionStorage.setItem(viewedKey, 'true');
-    if (SupabaseService.isConfigured()) {
-      await SupabaseService.incrementLessonView(lessonId);
-      return;
-    }
     const docRef = doc(db, 'lessons', lessonId);
     await updateDoc(docRef, {
       views: increment(1)
@@ -375,10 +314,8 @@ export function getSmartEmbedUrl(fileUrl: string, fileType: string, useProxy: bo
 
     if (fileId) {
       if (useProxy) {
-        // Mode 2: Google Docs Viewer Proxy (Stable for multi-account / blocked cookies)
         return `https://docs.google.com/viewer?srcid=${fileId}&pid=explorer&efh=false&a=v&chrome=false&embedded=true`;
       }
-      // Mode 1: Standard Drive Preview (Better for mobile/scaling)
       return `https://drive.google.com/file/d/${fileId}/preview`;
     }
   }

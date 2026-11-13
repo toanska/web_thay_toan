@@ -22,12 +22,10 @@ import { AdminDashboardView } from './components/Admin/AdminDashboardView';
 import { MaterialListView } from './components/Materials/MaterialListView';
 import { StudentLessonCatalog } from './components/student/StudentLessonCatalog';
 import { TeacherLessonUploader } from './components/teacher/TeacherLessonUploader';
-import { SupabaseSyncModal } from './components/SupabaseSync/SupabaseSyncModal';
 import { isTeacherToanOrAdmin } from './utils/authUtils';
 import { updateDynamicMetadata } from './utils/seoHelper';
 
 import { StorageService } from './services/storageService';
-import { SupabaseService } from './services/supabaseService';
 import { getPublicLessons, deleteLesson, getCachedLessons, Lesson } from './services/lessonService';
 import { 
   User, 
@@ -79,7 +77,6 @@ export function App() {
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [viewingAttempt, setViewingAttempt] = useState<ExamAttempt | null>(null);
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [sessionConflictData, setSessionConflictData] = useState<{
@@ -90,6 +87,7 @@ export function App() {
   } | null>(null);
   const [syncToast, setSyncToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const [dbConnected, setDbConnected] = useState(false);
+  const [isQuotaHit, setIsQuotaHit] = useState(() => StorageService.isQuotaExceeded());
 
   const showToast = (message: string, type: 'success' | 'info' = 'info') => {
     setSyncToast({ message, type });
@@ -98,26 +96,18 @@ export function App() {
     }, 4500);
   };
 
-  const reloadAllData = async () => {
-    try {
-      if (SupabaseService.isConfigured()) {
-        const sbData = await StorageService.syncAllFromSupabase();
-        if (sbData) {
-          setNews(sbData.news);
-          setMaterials(sbData.materials);
-          setLessons(sbData.lessons);
-          setExams(sbData.exams);
-          setQuestions(sbData.questions);
-          setAttempts(sbData.attempts);
-          setNotifications(sbData.notifications as any);
-          setAvailableUsers(sbData.users);
-          setDbConnected(true);
-          return;
-        }
-        // Supabase configured but unreachable -> fall back to local cache / Firestore
-        setDbConnected(false);
-      }
+  const activeExamRef = useRef<Exam | null>(null);
+  useEffect(() => {
+    activeExamRef.current = activeExam;
+  }, [activeExam]);
 
+  const isReloadingRef = useRef(false);
+  const lastReloadAtRef = useRef(0);
+
+  const reloadAllData = async () => {
+    if (isReloadingRef.current) return;
+    isReloadingRef.current = true;
+    try {
       const results = await Promise.allSettled([
         StorageService.getNews(),
         StorageService.getMaterials(),
@@ -139,21 +129,19 @@ export function App() {
       if (results[7].status === 'fulfilled') setAvailableUsers(results[7].value);
 
       const quotaHit = StorageService.isQuotaExceeded();
-      setDbConnected(!SupabaseService.isConfigured() && !quotaHit);
+      setIsQuotaHit(quotaHit);
+      setDbConnected(!quotaHit);
       if (!quotaHit) {
         StorageService.markSyncFresh();
+        lastReloadAtRef.current = Date.now();
       }
     } catch (err) {
       console.error('Failed to reload data:', err);
-      if (SupabaseService.isConfigured()) {
-        setDbConnected(false);
-      }
+    } finally {
+      isReloadingRef.current = false;
     }
   };
 
-  // Load initial data: always fetch fresh data when Supabase PostgreSQL is configured (unlimited reads/writes),
-  // otherwise use 5-minute TTL guard to conserve Firestore daily read quota.
-  const unsubRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     const initAndLoad = async () => {
       await StorageService.initialize({
@@ -164,7 +152,6 @@ export function App() {
         materials: INITIAL_MATERIALS
       });
       
-      // Auto-detect developer and login as admin if authenticated via Google
       const { auth } = await import('./firebase');
       if (auth.currentUser && (auth.currentUser.email === 'toanska@gmail.com' || auth.currentUser.email === 'admin.tinhoc@thcs.edu.vn')) {
         const adminUser = INITIAL_USERS.find(u => u.code === 'ADMIN-TINHOC');
@@ -173,16 +160,11 @@ export function App() {
         }
       }
 
-      if (SupabaseService.isConfigured() || !StorageService.isSyncFresh()) {
-        await reloadAllData();
-      } else {
-        setDbConnected(!StorageService.isQuotaExceeded());
-      }
+      await reloadAllData();
     };
 
     initAndLoad();
 
-    // Fallback for multi-window storage events (Logo, etc)
     const handleStorageEvent = (e: StorageEvent) => {
       if (e.key && e.key.startsWith('thcs_')) {
         setNews(StorageService.getCachedNews());
@@ -194,33 +176,27 @@ export function App() {
       }
     };
 
-    let lastConnectedSbUrl = SupabaseService.isConfigured()
-      ? SupabaseService.cleanUrl(SupabaseService.getConfig().projectUrl)
-      : '';
-
-    const handleSupabaseConfigUpdated = (event: Event) => {
-      const detail = (event as CustomEvent)?.detail;
-      if (
-        detail &&
-        detail.enabled &&
-        detail.status === 'connected' &&
-        SupabaseService.isConfigured()
-      ) {
-        const nextUrl = SupabaseService.cleanUrl(detail.projectUrl);
-        if (nextUrl && nextUrl !== lastConnectedSbUrl) {
-          lastConnectedSbUrl = nextUrl;
-          reloadAllData();
-        }
-      }
-    };
-
     window.addEventListener('storage', handleStorageEvent);
-    window.addEventListener('thcs_supabase_config_updated', handleSupabaseConfigUpdated);
+    return () => {
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, []);
+
+  // Kênh Realtime Firebase Firestore (cập nhật tức thì trên mọi thiết bị khi có thay đổi)
+  useEffect(() => {
+    const unsub = StorageService.subscribeToCollections({
+      onUsers: (data) => setAvailableUsers(data),
+      onExams: (data) => setExams(data),
+      onNews: (data) => setNews(data),
+      onMaterials: (data) => setMaterials(data),
+      onAttempts: (data) => setAttempts(data),
+      onQuestions: (data) => setQuestions(data),
+      onNotifications: (data) => setNotifications(data as any),
+      onLessons: (data) => setLessons(data),
+    });
 
     return () => {
-      if (unsubRef.current) unsubRef.current();
-      window.removeEventListener('storage', handleStorageEvent);
-      window.removeEventListener('thcs_supabase_config_updated', handleSupabaseConfigUpdated);
+      unsub();
     };
   }, []);
 
@@ -238,18 +214,14 @@ export function App() {
     }
   }, [currentUser.id, currentUser.role, activeTab]);
 
-  // 4. Connection Status Monitor (tracks Supabase when configured, otherwise Firebase Auth)
+  // 4. Connection Status Monitor
   useEffect(() => {
-    if (SupabaseService.isConfigured()) {
-      return;
-    }
+    setDbConnected(true);
     let unsub: (() => void) | undefined;
     const checkConn = async () => {
       const { onAuthStateChanged } = await import('firebase/auth');
       unsub = onAuthStateChanged(StorageService.auth, (user) => {
-        if (!SupabaseService.isConfigured()) {
-          setDbConnected(!!user && !StorageService.isQuotaExceeded());
-        }
+        setDbConnected(true);
       });
     };
     checkConn();
@@ -363,8 +335,10 @@ export function App() {
         setQuestions(StorageService.getCachedQuestions());
         setAttempts(StorageService.getCachedAttempts());
         setAvailableUsers(StorageService.getCachedUsers());
+        setNotifications(StorageService.getCachedNotifications() as any);
         const { getCachedLessons } = await import('./services/lessonService');
         setLessons(getCachedLessons());
+        await reloadAllData();
         showToast(`Đã khôi phục toàn bộ dữ liệu từ Google Drive (${fileName})!`, 'success');
       } else {
         showToast('Tệp sao lưu trên Google Drive không đúng định dạng.', 'info');
@@ -572,7 +546,7 @@ export function App() {
         const retained = prev.filter(u => !newMap.has(u.id));
         return [...newUsers, ...retained];
       });
-      await Promise.all(newUsers.map(u => StorageService.saveUser(u)));
+      await StorageService.saveUsersBulk(newUsers);
     } catch (err) {
       console.error('Error saving batch users:', err);
     }
@@ -589,14 +563,15 @@ export function App() {
     if (confirm(`Bạn có chắc chắn muốn xóa ${ids.length} người dùng đã chọn?`)) {
       const set = new Set(ids);
       setAvailableUsers(prev => prev.filter(u => !set.has(u.id)));
-      await Promise.all(ids.map(id => StorageService.deleteUser(id)));
+      await StorageService.deleteUsersBulk(ids);
     }
   };
 
   const handleDeleteAttemptsBatch = async (ids: string[]) => {
     if (confirm(`Bạn có chắc chắn muốn xóa ${ids.length} kết quả đã chọn?`)) {
-      // In a real Firebase app, we'd batch this, but for now loop is fine
-      await Promise.all(ids.map(id => StorageService.deleteAttempt(id)));
+      const set = new Set(ids);
+      setAttempts(prev => prev.filter(a => !set.has(a.id)));
+      await StorageService.deleteAttemptsBulk(ids);
     }
   };
 
@@ -635,7 +610,7 @@ export function App() {
 
   const handleSaveAIBatchQuestions = async (newQuestions: Question[]) => {
     setQuestions(prev => [...newQuestions, ...prev]);
-    await Promise.all(newQuestions.map(q => StorageService.saveQuestion(q)));
+    await StorageService.saveQuestionsBulk(newQuestions);
     setIsAIGeneratorOpen(false);
   };
 
@@ -651,7 +626,7 @@ export function App() {
       return [exam, ...prev];
     });
     if (exam.questions && exam.questions.length > 0) {
-      await Promise.all(exam.questions.map(q => StorageService.saveQuestion(q)));
+      await StorageService.saveQuestionsBulk(exam.questions);
     }
     await StorageService.saveExam(exam);
     setEditingExam(undefined);
@@ -694,6 +669,11 @@ export function App() {
     await StorageService.saveAttempt(attempt);
     setActiveExam(null);
     setViewingAttempt(attempt);
+    if (StorageService.isAttemptPending(attempt.id)) {
+      showToast('Mạng không ổn định: Bài làm đã lưu an toàn trên máy và sẽ tự gửi lên máy chủ khi có mạng!', 'info');
+    } else {
+      showToast('Đã nộp bài và lưu điểm thành công lên máy chủ!', 'success');
+    }
   };
 
   // Notifications
@@ -733,11 +713,12 @@ export function App() {
         onImportData={handleImportData}
         onBackupToDrive={handleBackupToDrive}
         onRestoreFromDrive={handleRestoreFromDrive}
-        onOpenSupabaseSync={() => setIsSupabaseModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenChangePasswordModal={() => setIsChangePasswordModalOpen(true)}
         onLogout={handleLogout}
         dbConnected={dbConnected}
+        isQuotaExceeded={isQuotaHit}
+        onRetryConnect={reloadAllData}
       />
 
       {/* Main App Container */}
@@ -1074,12 +1055,7 @@ export function App() {
         />
       )}
 
-      {/* MODAL 7: Supabase PostgreSQL Database Sync & Config */}
-      <SupabaseSyncModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => setIsSupabaseModalOpen(false)}
-        onDataChanged={reloadAllData}
-      />
+
 
       {/* MODAL 8: Cửa Sổ Đăng Nhập & Chuyển Đổi Tài Khoản */}
       <LoginModal

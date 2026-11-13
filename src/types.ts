@@ -198,16 +198,6 @@ export interface NotificationItem {
 
 export type AppNotification = NotificationItem;
 
-export interface SupabaseConfig {
-  projectUrl: string;
-  anonKey: string;
-  enabled: boolean;
-  autoSync: boolean;
-  lastSyncedAt?: string;
-  status: 'idle' | 'syncing' | 'connected' | 'error';
-  lastError?: string;
-  syncCount?: number;
-}
 
 export type NavigationTab = 
   | 'news' 

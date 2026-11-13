@@ -5,7 +5,8 @@ import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, 'ai-studio-cngthngtinkhotht-cd1651c7-f107-4c64-88bc-b3027939b0a1');
+const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
+export const db = dbId ? getFirestore(app, dbId) : getFirestore(app, 'ai-studio-cngthngtinkhotht-cd1651c7-f107-4c64-88bc-b3027939b0a1');
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
