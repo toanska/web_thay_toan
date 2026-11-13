@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { User, NotificationItem, NavigationTab } from '../types';
 import { isTeacherToanOrAdmin } from '../utils/authUtils';
-import { CloudflareService } from '../services/cloudflareService';
+import { SupabaseService } from '../services/supabaseService';
 import { StorageService } from '../services/storageService';
 
 interface HeaderProps {
@@ -48,7 +48,9 @@ interface HeaderProps {
   onResetData: () => void;
   onExportData: () => void;
   onImportData: (json: string) => void;
-  onOpenCloudflareSync?: () => void;
+  onBackupToDrive?: () => void;
+  onRestoreFromDrive?: () => void;
+  onOpenSupabaseSync?: () => void;
   onOpenLoginModal?: () => void;
   onOpenChangePasswordModal?: () => void;
   onLogout?: () => void;
@@ -66,7 +68,9 @@ export const Header: React.FC<HeaderProps> = ({
   onResetData,
   onExportData,
   onImportData,
-  onOpenCloudflareSync,
+  onBackupToDrive,
+  onRestoreFromDrive,
+  onOpenSupabaseSync,
   onOpenLoginModal,
   onOpenChangePasswordModal,
   onLogout,
@@ -107,43 +111,43 @@ export const Header: React.FC<HeaderProps> = ({
     status: 'idle' | 'syncing' | 'connected' | 'error';
     isSyncing: boolean;
     autoSync: boolean;
-    hasWorker: boolean;
+    hasSupabase: boolean;
   }>(() => {
-    const cfg = CloudflareService.getConfig();
+    const cfg = SupabaseService.getConfig();
     return {
       status: cfg.status,
       isSyncing: cfg.status === 'syncing',
       autoSync: cfg.autoSync && cfg.enabled,
-      hasWorker: !!cfg.workerUrl,
+      hasSupabase: !!(cfg.projectUrl && cfg.anonKey),
     };
   });
 
   useEffect(() => {
     const handleSyncStatus = (e: any) => {
-      const cfg = CloudflareService.getConfig();
+      const cfg = SupabaseService.getConfig();
       setSyncState({
         status: cfg.status,
         isSyncing: e?.detail?.status === 'syncing' || cfg.status === 'syncing',
         autoSync: cfg.autoSync && cfg.enabled,
-        hasWorker: !!cfg.workerUrl,
+        hasSupabase: !!(cfg.projectUrl && cfg.anonKey),
       });
     };
 
     const handleConfigUpdated = (e: any) => {
-      const cfg = e.detail || CloudflareService.getConfig();
+      const cfg = e.detail || SupabaseService.getConfig();
       setSyncState({
         status: cfg.status,
         isSyncing: cfg.status === 'syncing',
         autoSync: cfg.autoSync && cfg.enabled,
-        hasWorker: !!cfg.workerUrl,
+        hasSupabase: !!(cfg.projectUrl && cfg.anonKey),
       });
     };
 
     window.addEventListener('thcs_sync_status_changed', handleSyncStatus);
-    window.addEventListener('thcs_cloudflare_config_updated', handleConfigUpdated);
+    window.addEventListener('thcs_supabase_config_updated', handleConfigUpdated);
     return () => {
       window.removeEventListener('thcs_sync_status_changed', handleSyncStatus);
-      window.removeEventListener('thcs_cloudflare_config_updated', handleConfigUpdated);
+      window.removeEventListener('thcs_supabase_config_updated', handleConfigUpdated);
     };
   }, []);
 
@@ -502,7 +506,44 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>Cập nhật Logo Website</span>
                       </button>
 
-                      {/* Cloudflare sync removed - now automatic via Firebase */}
+                      {onOpenSupabaseSync && (
+                        <button
+                          onClick={() => { onOpenSupabaseSync(); setShowSettingsMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-emerald-50 flex items-center justify-between text-emerald-700 font-semibold cursor-pointer"
+                        >
+                          <span className="flex items-center space-x-2">
+                            <Database className="w-4 h-4 text-emerald-600" />
+                            <span>CSDL Supabase (PostgreSQL)</span>
+                          </span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                            SupabaseService.isConfigured()
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {SupabaseService.isConfigured() ? 'Đã bật' : 'Cài đặt'}
+                          </span>
+                        </button>
+                      )}
+
+                      {onBackupToDrive && (
+                        <button
+                          onClick={() => { onBackupToDrive(); setShowSettingsMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-emerald-50 flex items-center space-x-2 text-emerald-700 font-semibold cursor-pointer"
+                        >
+                          <CloudLightning className="w-4 h-4 text-emerald-600" />
+                          <span>Sao lưu toàn bộ lên Google Drive</span>
+                        </button>
+                      )}
+
+                      {onRestoreFromDrive && (
+                        <button
+                          onClick={() => { onRestoreFromDrive(); setShowSettingsMenu(false); }}
+                          className="w-full px-3 py-2 text-left text-xs rounded-lg hover:bg-blue-50 flex items-center space-x-2 text-blue-700 font-semibold cursor-pointer"
+                        >
+                          <RefreshCw className="w-4 h-4 text-blue-600" />
+                          <span>Khôi phục từ Google Drive</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => { onExportData(); setShowSettingsMenu(false); }}

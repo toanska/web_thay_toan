@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { User } from '../../types';
 import { findUserForLogin } from '../../utils/authUtils';
+import { INITIAL_USERS } from '../../data/mockData';
 
 interface LoginPageProps {
   currentUser: User;
@@ -45,7 +46,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     const enteredPin = passwordInput.trim();
 
     if (!query) {
-      setErrorMessage('Vui lòng nhập Email, Mã định danh hoặc Họ tên tài khoản!');
+      setErrorMessage('Vui lòng nhập Email hoặc Mã định danh tài khoản!');
       return;
     }
 
@@ -54,11 +55,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    const allUsers = users || [];
+    // Luôn gộp danh sách tài khoản hệ thống mặc định (Admin/Thầy Toàn/Học sinh mẫu) làm phương án dự phòng khi mất kết nối Cloud
+    const byId = new Map<string, User>();
+    INITIAL_USERS.forEach(u => byId.set(u.id, u));
+    (users || []).forEach(u => {
+      if (u && u.id) byId.set(u.id, u);
+    });
+    const allUsers = Array.from(byId.values());
     const matched = findUserForLogin(allUsers, query);
 
     if (!matched) {
-      setErrorMessage('Mã định danh hoặc Email không chính xác! Vui lòng nhập đúng Mã học sinh được cấp (VD: HS-20269101 hoặc 20269101).');
+      setErrorMessage('Mã định danh hoặc Email không chính xác! Vui lòng nhập đúng Mã tài khoản được cấp (VD: ADMIN-TINHOC, GV-TINHOC01, HS-20269101...).');
       return;
     }
 
@@ -75,8 +82,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name}. Đang chuyển giao diện...`);
+    setSuccessMessage(`Đăng nhập thành công! Chào mừng ${matched.name}. Đang chuyển đến trang bài kiểm tra...`);
     onLoginUser(matched);
+    if (matched.role === 'student') {
+      onNavigateToTab('exams');
+    } else {
+      onNavigateToTab('admin_portal');
+    }
     setUsernameInput('');
     setPasswordInput('');
   };
@@ -184,59 +196,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             >
               <Lock className="w-4 h-4" />
               <span>Đăng Nhập Vào Hệ Thống</span>
-            </button>
-
-            <div className="relative flex items-center py-2">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Hoặc</span>
-              <div className="flex-grow border-t border-slate-200"></div>
-            </div>
-
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  const { googleSignIn } = await import('../../firebase');
-                  const res = await googleSignIn();
-                  if (res) {
-                    if (res.user.email === 'toanska@gmail.com' || res.user.email === 'admin.tinhoc@thcs.edu.vn') {
-                      const adminUser = users.find(u => u.code === 'ADMIN-TINHOC');
-                      if (adminUser) {
-                        onLoginUser(adminUser);
-                      } else {
-                        onLoginUser({
-                          id: res.user.uid,
-                          name: res.user.displayName || 'Admin Thầy Toàn',
-                          role: 'admin',
-                          code: 'ADMIN-GOOGLE',
-                          avatar: res.user.photoURL || '',
-                          email: res.user.email || '',
-                          school: 'THCS Ngô Quyền'
-                        });
-                      }
-                    } else {
-                      const matched = users.find(u => u.email === res.user.email);
-                      if (matched) {
-                        onLoginUser(matched);
-                      } else {
-                        alert('Tài khoản Google này chưa được liên kết với danh sách học sinh. Vui lòng đăng nhập bằng Mã định danh hoặc liên hệ Thầy Toàn.');
-                        return;
-                      }
-                    }
-                  }
-                } catch (err: any) {
-                  setErrorMessage('Lỗi đăng nhập Google: ' + err.message);
-                }
-              }}
-              className="w-full py-3.5 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-3 cursor-pointer"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 48 48">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-              </svg>
-              <span>Tiếp tục bằng tài khoản Google</span>
             </button>
           </form>
 

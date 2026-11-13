@@ -52,6 +52,60 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
   const [uploadError, setUploadError] = useState<string | null>(null);
   const cancelTaskRef = useRef<UploadTask | null>(null);
 
+  // Drive diagnostic & connection states
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [isConnectingDrive, setIsConnectingDrive] = useState(false);
+  const [driveConnectedEmail, setDriveConnectedEmail] = useState<string | null>(null);
+  const [diagResult, setDiagResult] = useState<{
+    ok: boolean;
+    status: 'public' | 'restricted' | 'error';
+    message: string;
+    details: string[];
+  } | null>(null);
+
+  const handleConnectGoogleDrive = async () => {
+    setIsConnectingDrive(true);
+    setUploadError(null);
+    try {
+      const { googleSignIn } = await import('../../firebase');
+      const res = await googleSignIn();
+      if (res?.user?.email) {
+        setDriveConnectedEmail(res.user.email);
+      } else {
+        setDriveConnectedEmail('Đã kết nối Google Drive');
+      }
+      if (externalUrl.trim()) {
+        const { GoogleDriveService } = await import('../../services/googleDriveService');
+        const diag = await GoogleDriveService.diagnoseDriveFile(externalUrl.trim());
+        setDiagResult(diag);
+      }
+    } catch (err: any) {
+      setUploadError(err?.message || 'Không thể kết nối Google Drive. Vui lòng thử lại và cho phép cửa sổ pop-up.');
+    } finally {
+      setIsConnectingDrive(false);
+    }
+  };
+
+  const handleDiagnoseDrive = async () => {
+    if (!externalUrl.trim()) return;
+    setIsDiagnosing(true);
+    setDiagResult(null);
+    try {
+      const { GoogleDriveService } = await import('../../services/googleDriveService');
+      const res = await GoogleDriveService.diagnoseDriveFile(externalUrl.trim());
+      setDiagResult(res);
+    } catch (err: any) {
+      setDiagResult({
+        ok: false,
+        status: 'error',
+        message: 'Lỗi không xác định khi chẩn đoán.',
+        details: [err?.message || String(err)]
+      });
+    } finally {
+      setIsDiagnosing(false);
+    }
+  };
+
   // Success modal states
   const [createdLessonId, setCreatedLessonId] = useState<string | null>(null);
   const [createdShareUrl, setCreatedShareUrl] = useState<string | null>(null);
@@ -398,11 +452,28 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
               </div>
 
               {sourceType === 'google_drive' && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] flex items-start gap-2 leading-relaxed">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold">Ưu điểm lưu trữ Google Drive:</p>
-                    <p>Dữ liệu được lưu vĩnh viễn trên Drive cá nhân, bảo mật tuyệt đối và học sinh luôn xem được tệp Office (PowerPoint, Word, Excel) ở chế độ hiển thị tốt nhất.</p>
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] space-y-2.5 leading-relaxed">
+                  <div className="flex items-start gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Ưu điểm lưu trữ Google Drive:</p>
+                      <p>Dữ liệu được lưu vĩnh viễn trên Drive cá nhân, tự động mở quyền xem cho học sinh và hiển thị tốt PowerPoint, Word, Excel, PDF.</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-emerald-200/70">
+                    <span className="font-semibold text-emerald-800">
+                      {driveConnectedEmail
+                        ? `✓ Đã kết nối Drive: ${driveConnectedEmail}`
+                        : 'Cần cấp quyền Google Drive trước khi tải tệp trực tiếp:'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleConnectGoogleDrive}
+                      disabled={isConnectingDrive}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white font-bold text-[11px] transition-colors cursor-pointer"
+                    >
+                      {isConnectingDrive ? 'Đang kết nối...' : (driveConnectedEmail ? 'Đổi tài khoản Drive' : 'Kết nối Google Drive')}
+                    </button>
                   </div>
                 </div>
               )}
@@ -454,14 +525,69 @@ export const TeacherLessonUploader: React.FC<TeacherLessonUploaderProps> = ({ le
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Đường dẫn liên kết (URL)
                 </label>
-                <input
-                  type="url"
-                  value={externalUrl}
-                  onChange={(e) => setExternalUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=... hoặc Google Drive / Canva / Scratch"
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={externalUrl}
+                    onChange={(e) => {
+                      setExternalUrl(e.target.value);
+                      setDiagResult(null);
+                    }}
+                    placeholder="https://www.youtube.com/watch?v=... hoặc Google Drive / Canva / Scratch"
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  {(externalUrl.includes('drive.google.com') || externalUrl.includes('docs.google.com') || fileType === 'drive') && (
+                    <button
+                      type="button"
+                      onClick={handleDiagnoseDrive}
+                      disabled={isDiagnosing || !externalUrl.trim()}
+                      className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                      title="Kiểm tra quyền truy cập tệp Google Drive"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-teal-400" />
+                      <span>{isDiagnosing ? 'Đang kiểm tra...' : 'Kiểm tra quyền'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {diagResult && (
+                <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+                  diagResult.ok
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : diagResult.status === 'restricted'
+                      ? 'bg-amber-50 border-amber-200 text-amber-900'
+                      : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}>
+                  <div className="font-bold flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      {diagResult.ok ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                      )}
+                      <span>{diagResult.message}</span>
+                    </div>
+                    {!diagResult.ok && diagResult.message.includes('Chưa đăng nhập Google') && (
+                      <button
+                        type="button"
+                        onClick={handleConnectGoogleDrive}
+                        disabled={isConnectingDrive}
+                        className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold cursor-pointer"
+                      >
+                        {isConnectingDrive ? 'Đang kết nối...' : 'Kết nối Google Drive để kiểm tra'}
+                      </button>
+                    )}
+                  </div>
+                  {diagResult.details.length > 0 && (
+                    <ul className="list-disc pl-5 space-y-0.5 text-[11px] opacity-90 font-mono">
+                      {diagResult.details.map((d, idx) => (
+                        <li key={idx}>{d}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[

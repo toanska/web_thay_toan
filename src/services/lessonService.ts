@@ -21,6 +21,7 @@ import {
   UploadTask 
 } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
+import { SupabaseService } from './supabaseService';
 
 export interface Lesson {
   id: string;
@@ -128,18 +129,34 @@ export async function uploadLessonFile(
 }
 
 /**
- * Create a new lesson document in Firestore.
+ * Create a new lesson document in Supabase PostgreSQL (or Firestore fallback).
  */
 export async function createLesson(lessonData: Omit<Lesson, 'id' | 'views' | 'createdAt' | 'createdBy'>): Promise<string> {
   const lessonId = `lesson-${Date.now()}`;
   const user = auth.currentUser;
-  
-  const newLesson: Lesson = {
+  const nowIso = new Date().toISOString();
+
+  const localLesson: Lesson = {
     ...lessonData,
     id: lessonId,
     views: 0,
-    createdAt: serverTimestamp(),
+    createdAt: nowIso,
     createdBy: user ? user.uid : 'teacher-toan'
+  };
+
+  if (typeof localStorage !== 'undefined') {
+    const updated = [localLesson, ...getCachedLessons().filter(l => l.id !== lessonId)];
+    try { localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(updated)); } catch {}
+  }
+
+  if (SupabaseService.isConfigured()) {
+    await SupabaseService.upsertItem('lessons', localLesson);
+    return lessonId;
+  }
+
+  const newLesson: Lesson = {
+    ...localLesson,
+    createdAt: serverTimestamp(),
   };
 
   await setDoc(doc(db, 'lessons', lessonId), newLesson);
@@ -150,8 +167,6 @@ export async function createLesson(lessonData: Omit<Lesson, 'id' | 'views' | 'cr
  * Update an existing lesson document.
  */
 export async function updateLesson(lessonId: string, newData: Partial<Lesson>, oldStoragePath?: string | null, newFile?: File): Promise<void> {
-  const docRef = doc(db, 'lessons', lessonId);
-  
   if (oldStoragePath && newFile) {
     try {
       const oldRef = ref(storage, oldStoragePath);
@@ -161,6 +176,23 @@ export async function updateLesson(lessonId: string, newData: Partial<Lesson>, o
     }
   }
 
+  if (SupabaseService.isConfigured()) {
+    const cached = getCachedLessons();
+    const existing = cached.find(l => l.id === lessonId);
+    const merged: Lesson = {
+      ...(existing || ({ id: lessonId, views: 0, createdAt: new Date().toISOString(), createdBy: 'teacher-toan' } as any)),
+      ...newData,
+      id: lessonId,
+    };
+    const nextList = existing ? cached.map(l => (l.id === lessonId ? merged : l)) : [merged, ...cached];
+    if (typeof localStorage !== 'undefined') {
+      try { localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(nextList)); } catch {}
+    }
+    await SupabaseService.upsertItem('lessons', merged);
+    return;
+  }
+
+  const docRef = doc(db, 'lessons', lessonId);
   await updateDoc(docRef, {
     ...newData,
     updatedAt: serverTimestamp()
@@ -168,9 +200,14 @@ export async function updateLesson(lessonId: string, newData: Partial<Lesson>, o
 }
 
 /**
- * Delete a lesson from Firestore and its associated Storage file.
+ * Delete a lesson from Supabase PostgreSQL or Firestore and its associated Storage file.
  */
 export async function deleteLesson(lessonId: string, storagePath?: string | null): Promise<void> {
+  if (typeof localStorage !== 'undefined') {
+    const nextList = getCachedLessons().filter(l => l.id !== lessonId);
+    try { localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(nextList)); } catch {}
+  }
+
   if (storagePath) {
     try {
       const fileRef = ref(storage, storagePath);
@@ -179,13 +216,72 @@ export async function deleteLesson(lessonId: string, storagePath?: string | null
       console.warn('Không tìm thấy file trên Storage hoặc đã bị xóa:', e);
     }
   }
+
+  if (SupabaseService.isConfigured()) {
+    await SupabaseService.deleteItem('lessons', lessonId);
+    return;
+  }
+
   await deleteDoc(doc(db, 'lessons', lessonId));
+}
+
+export const LESSONS_CACHE_KEY = 'thcs_cache_lessons_v2';
+
+export function getCachedLessons(): Lesson[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LESSONS_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as Lesson[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function importLessonsBackup(lessons: Lesson[]): Promise<void> {
+  if (!Array.isArray(lessons)) return;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(lessons));
+    } catch {
+      // ignore quota
+    }
+  }
+  if (SupabaseService.isConfigured()) {
+    await Promise.allSettled(
+      lessons.filter(l => l && l.id).map(l => SupabaseService.upsertItem('lessons', l))
+    );
+    return;
+  }
+  await Promise.allSettled(
+    lessons.filter(l => l && l.id).map(l => setDoc(doc(db, 'lessons', l.id), l))
+  );
 }
 
 /**
  * Get all lessons with optional filtering.
  */
 export async function getPublicLessons(filters?: { grade?: string; subject?: string; semester?: string }): Promise<Lesson[]> {
+  if (SupabaseService.isConfigured()) {
+    try {
+      let lessons = await SupabaseService.getCollection<Lesson>('lessons');
+      if (typeof localStorage !== 'undefined') {
+        try { localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(lessons)); } catch {}
+      }
+      if (filters?.grade && filters.grade !== 'all') {
+        lessons = lessons.filter(l => l.grade === filters.grade);
+      }
+      if (filters?.subject && filters.subject !== 'all') {
+        lessons = lessons.filter(l => l.subject === filters.subject);
+      }
+      if (filters?.semester && filters.semester !== 'all') {
+        lessons = lessons.filter(l => l.semester === filters.semester);
+      }
+      return lessons;
+    } catch (error) {
+      console.warn('[Supabase Fallback] lessons:', error);
+    }
+  }
+
   try {
     let q = query(collection(db, 'lessons'), orderBy('createdAt', 'desc'));
     
@@ -196,6 +292,14 @@ export async function getPublicLessons(filters?: { grade?: string; subject?: str
     const snapshot = await getDocs(q);
     let lessons = snapshot.docs.map(docSnap => docSnap.data() as Lesson);
 
+    if ((!filters?.grade || filters.grade === 'all') && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(lessons));
+      } catch {
+        // ignore storage quota
+      }
+    }
+
     if (filters?.subject && filters.subject !== 'all') {
       lessons = lessons.filter(l => l.subject === filters.subject);
     }
@@ -205,8 +309,18 @@ export async function getPublicLessons(filters?: { grade?: string; subject?: str
 
     return lessons;
   } catch (error) {
-    console.error('Lỗi khi tải danh sách bài giảng:', error);
-    return [];
+    console.warn('[Firestore Fallback] Lỗi khi tải danh sách bài giảng từ cloud, dùng dữ liệu cache:', error);
+    let lessons = getCachedLessons();
+    if (filters?.grade && filters.grade !== 'all') {
+      lessons = lessons.filter(l => l.grade === filters.grade);
+    }
+    if (filters?.subject && filters.subject !== 'all') {
+      lessons = lessons.filter(l => l.subject === filters.subject);
+    }
+    if (filters?.semester && filters.semester !== 'all') {
+      lessons = lessons.filter(l => l.semester === filters.semester);
+    }
+    return lessons;
   }
 }
 
@@ -219,6 +333,10 @@ export async function incrementLessonView(lessonId: string): Promise<void> {
 
   try {
     sessionStorage.setItem(viewedKey, 'true');
+    if (SupabaseService.isConfigured()) {
+      await SupabaseService.incrementLessonView(lessonId);
+      return;
+    }
     const docRef = doc(db, 'lessons', lessonId);
     await updateDoc(docRef, {
       views: increment(1)
@@ -234,7 +352,7 @@ export async function incrementLessonView(lessonId: string): Promise<void> {
 export function getSmartEmbedUrl(fileUrl: string, fileType: string, useProxy: boolean = false): string {
   if (!fileUrl) return '';
 
-  const isDriveLink = fileUrl.includes('drive.google.com');
+  const isDriveLink = fileUrl.includes('drive.google.com') || fileUrl.includes('docs.google.com');
 
   if (fileType === 'youtube' || fileUrl.includes('youtube.com') || fileUrl.includes('youtu.be')) {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -244,15 +362,20 @@ export function getSmartEmbedUrl(fileUrl: string, fileType: string, useProxy: bo
 
   if (fileType === 'drive' || isDriveLink) {
     let fileId = '';
-    if (fileUrl.includes('/file/d/')) {
-      fileId = fileUrl.split('/file/d/')[1].split('/')[0];
-    } else if (fileUrl.includes('?id=')) {
-      fileId = new URL(fileUrl).searchParams.get('id') || '';
+    const idMatch = fileUrl.match(/\/(?:file|document|presentation|spreadsheets)\/d\/([a-zA-Z0-9_-]+)/);
+    if (idMatch && idMatch[1]) {
+      fileId = idMatch[1];
+    } else if (fileUrl.includes('?id=') || fileUrl.includes('&id=')) {
+      try {
+        fileId = new URL(fileUrl).searchParams.get('id') || '';
+      } catch {
+        fileId = '';
+      }
     }
 
     if (fileId) {
       if (useProxy) {
-        // Mode 2: Google Docs Viewer Proxy (Stable for multi-account)
+        // Mode 2: Google Docs Viewer Proxy (Stable for multi-account / blocked cookies)
         return `https://docs.google.com/viewer?srcid=${fileId}&pid=explorer&efh=false&a=v&chrome=false&embedded=true`;
       }
       // Mode 1: Standard Drive Preview (Better for mobile/scaling)

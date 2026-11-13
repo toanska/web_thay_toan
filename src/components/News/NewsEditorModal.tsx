@@ -53,7 +53,7 @@ export const NewsEditorModal: React.FC<NewsEditorModalProps> = ({
       featuredImage: featuredImage.trim(),
       publishedAt: articleToEdit?.publishedAt || new Date().toISOString().split('T')[0],
       authorName: articleToEdit?.authorName || currentUser.name,
-      authorTitle: articleToEdit?.authorTitle || (currentUser.role === 'teacher' ? 'Giáo viên bộ môn' : 'Ban Giám Hiệu'),
+      authorTitle: articleToEdit?.authorTitle || (currentUser.role === 'teacher' ? 'Giáo viên bộ môn' : 'Thầy Toàn'),
       authorRole: currentUser.role,
       views: articleToEdit?.views || 10,
       likes: articleToEdit?.likes || 0,

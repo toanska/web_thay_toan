@@ -22,13 +22,13 @@ import { AdminDashboardView } from './components/Admin/AdminDashboardView';
 import { MaterialListView } from './components/Materials/MaterialListView';
 import { StudentLessonCatalog } from './components/student/StudentLessonCatalog';
 import { TeacherLessonUploader } from './components/teacher/TeacherLessonUploader';
-import { CloudflareSyncModal } from './components/CloudflareSync/CloudflareSyncModal';
+import { SupabaseSyncModal } from './components/SupabaseSync/SupabaseSyncModal';
 import { isTeacherToanOrAdmin } from './utils/authUtils';
 import { updateDynamicMetadata } from './utils/seoHelper';
 
 import { StorageService } from './services/storageService';
-import { CloudflareService } from './services/cloudflareService';
-import { getPublicLessons, deleteLesson, Lesson } from './services/lessonService';
+import { SupabaseService } from './services/supabaseService';
+import { getPublicLessons, deleteLesson, getCachedLessons, Lesson } from './services/lessonService';
 import { 
   User, 
   NewsArticle, 
@@ -50,7 +50,7 @@ import {
 export function App() {
   // State Initialization
   const [currentUser, setCurrentUser] = useState<User>(() => StorageService.getCurrentUser());
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<User[]>(() => StorageService.getCachedUsers());
   const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -60,14 +60,14 @@ export function App() {
     return 'exams';
   });
 
-  // Domain state
-  const [news, setNews] = useState<NewsArticle[]>([]);
-  const [materials, setMaterials] = useState<LessonMaterial[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [attempts, setAttempts] = useState<ExamAttempt[]>([]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // Domain state (hydrated synchronously from local cache so UI & login work immediately even offline or over Firestore quota)
+  const [news, setNews] = useState<NewsArticle[]>(() => StorageService.getCachedNews());
+  const [materials, setMaterials] = useState<LessonMaterial[]>(() => StorageService.getCachedMaterials());
+  const [lessons, setLessons] = useState<Lesson[]>(() => getCachedLessons());
+  const [exams, setExams] = useState<Exam[]>(() => StorageService.getCachedExams());
+  const [questions, setQuestions] = useState<Question[]>(() => StorageService.getCachedQuestions());
+  const [attempts, setAttempts] = useState<ExamAttempt[]>(() => StorageService.getCachedAttempts());
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => StorageService.getCachedNotifications() as any);
 
   // Modals & Active Session State
   const [activeExam, setActiveExam] = useState<Exam | null>(null);
@@ -79,7 +79,7 @@ export function App() {
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [viewingAttempt, setViewingAttempt] = useState<ExamAttempt | null>(null);
-  const [isCloudflareModalOpen, setIsCloudflareModalOpen] = useState(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [sessionConflictData, setSessionConflictData] = useState<{
@@ -91,18 +91,34 @@ export function App() {
   const [syncToast, setSyncToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const [dbConnected, setDbConnected] = useState(false);
 
+  const showToast = (message: string, type: 'success' | 'info' = 'info') => {
+    setSyncToast({ message, type });
+    setTimeout(() => {
+      setSyncToast(prev => (prev?.message === message ? null : prev));
+    }, 4500);
+  };
+
   const reloadAllData = async () => {
     try {
-      const [
-        newsData, 
-        materialsData, 
-        lessonsData,
-        examsData, 
-        questionsData, 
-        attemptsData, 
-        notificationsData, 
-        usersData
-      ] = await Promise.all([
+      if (SupabaseService.isConfigured()) {
+        const sbData = await StorageService.syncAllFromSupabase();
+        if (sbData) {
+          setNews(sbData.news);
+          setMaterials(sbData.materials);
+          setLessons(sbData.lessons);
+          setExams(sbData.exams);
+          setQuestions(sbData.questions);
+          setAttempts(sbData.attempts);
+          setNotifications(sbData.notifications as any);
+          setAvailableUsers(sbData.users);
+          setDbConnected(true);
+          return;
+        }
+        // Supabase configured but unreachable -> fall back to local cache / Firestore
+        setDbConnected(false);
+      }
+
+      const results = await Promise.allSettled([
         StorageService.getNews(),
         StorageService.getMaterials(),
         getPublicLessons(),
@@ -113,21 +129,30 @@ export function App() {
         StorageService.getUsers()
       ]);
 
-      // Update state with actual database data
-      setNews(newsData);
-      setMaterials(materialsData);
-      setLessons(lessonsData);
-      setExams(examsData);
-      setQuestions(questionsData);
-      setAttempts(attemptsData);
-      setNotifications(notificationsData);
-      setAvailableUsers(usersData);
+      if (results[0].status === 'fulfilled') setNews(results[0].value);
+      if (results[1].status === 'fulfilled') setMaterials(results[1].value);
+      if (results[2].status === 'fulfilled') setLessons(results[2].value);
+      if (results[3].status === 'fulfilled') setExams(results[3].value);
+      if (results[4].status === 'fulfilled') setQuestions(results[4].value);
+      if (results[5].status === 'fulfilled') setAttempts(results[5].value);
+      if (results[6].status === 'fulfilled') setNotifications(results[6].value as any);
+      if (results[7].status === 'fulfilled') setAvailableUsers(results[7].value);
+
+      const quotaHit = StorageService.isQuotaExceeded();
+      setDbConnected(!SupabaseService.isConfigured() && !quotaHit);
+      if (!quotaHit) {
+        StorageService.markSyncFresh();
+      }
     } catch (err) {
       console.error('Failed to reload data:', err);
+      if (SupabaseService.isConfigured()) {
+        setDbConnected(false);
+      }
     }
   };
 
-  // Load initial data and run automatic real-time background sync loop
+  // Load initial data: always fetch fresh data when Supabase PostgreSQL is configured (unlimited reads/writes),
+  // otherwise use 5-minute TTL guard to conserve Firestore daily read quota.
   const unsubRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     const initAndLoad = async () => {
@@ -148,60 +173,89 @@ export function App() {
         }
       }
 
-      // Initial fetch to populate state before listeners kick in
-      await reloadAllData();
-
-      // 1. Subscribe to Real-time Firestore Updates (Immediate Automatic Sync)
-      unsubRef.current = StorageService.subscribeToCollections({
-        onUsers: (data) => setAvailableUsers(data),
-        onExams: (data) => setExams(data),
-        onNews: (data) => setNews(data),
-        onMaterials: (data) => setMaterials(data),
-        onAttempts: (data) => setAttempts(data),
-        onQuestions: (data) => setQuestions(data),
-        onNotifications: (data) => setNotifications(data as any),
-      });
+      if (SupabaseService.isConfigured() || !StorageService.isSyncFresh()) {
+        await reloadAllData();
+      } else {
+        setDbConnected(!StorageService.isQuotaExceeded());
+      }
     };
 
     initAndLoad();
 
-    // 2. Fallback for multi-window storage events (Logo, etc)
+    // Fallback for multi-window storage events (Logo, etc)
     const handleStorageEvent = (e: StorageEvent) => {
       if (e.key && e.key.startsWith('thcs_')) {
-        reloadAllData();
+        setNews(StorageService.getCachedNews());
+        setMaterials(StorageService.getCachedMaterials());
+        setExams(StorageService.getCachedExams());
+        setQuestions(StorageService.getCachedQuestions());
+        setAttempts(StorageService.getCachedAttempts());
+        setAvailableUsers(StorageService.getCachedUsers());
+      }
+    };
+
+    let lastConnectedSbUrl = SupabaseService.isConfigured()
+      ? SupabaseService.cleanUrl(SupabaseService.getConfig().projectUrl)
+      : '';
+
+    const handleSupabaseConfigUpdated = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      if (
+        detail &&
+        detail.enabled &&
+        detail.status === 'connected' &&
+        SupabaseService.isConfigured()
+      ) {
+        const nextUrl = SupabaseService.cleanUrl(detail.projectUrl);
+        if (nextUrl && nextUrl !== lastConnectedSbUrl) {
+          lastConnectedSbUrl = nextUrl;
+          reloadAllData();
+        }
       }
     };
 
     window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('thcs_supabase_config_updated', handleSupabaseConfigUpdated);
 
     return () => {
       if (unsubRef.current) unsubRef.current();
       window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener('thcs_supabase_config_updated', handleSupabaseConfigUpdated);
     };
   }, []);
 
   // 3. Auto-redirect based on user role changes
   useEffect(() => {
-    // If user is admin/teacher and NOT currently on a restricted tab, move them to admin portal
-    // This handles both fresh login and returning to the site as admin
     const isAdmin = currentUser.role === 'admin' || currentUser.role === 'teacher';
-    if (isAdmin && (activeTab === 'login' || activeTab === 'exams')) {
+    if (isAdmin && activeTab === 'login') {
       setActiveTab('admin_portal');
-    } else if (currentUser.role === 'guest' && (activeTab === 'admin_portal' || activeTab === 'students' || activeTab === 'reports')) {
+    } else if (currentUser.role === 'student' && (activeTab === 'login' || activeTab === 'admin_portal' || activeTab === 'students' || activeTab === 'reports' || activeTab === 'question_bank')) {
+      // Khi học sinh đăng nhập thành công hoặc đang ở các tab hạn chế/đăng nhập, tự động chuyển ngay sang trang khảo thí / làm bài kiểm tra
+      setActiveTab('exams');
+    } else if (currentUser.role === 'guest' && (activeTab === 'admin_portal' || activeTab === 'students' || activeTab === 'reports' || activeTab === 'question_bank')) {
       // If guest accidentally hits admin tab, send to exams
       setActiveTab('exams');
     }
   }, [currentUser.id, currentUser.role, activeTab]);
 
-  // 4. Connection Status Monitor
+  // 4. Connection Status Monitor (tracks Supabase when configured, otherwise Firebase Auth)
   useEffect(() => {
+    if (SupabaseService.isConfigured()) {
+      return;
+    }
+    let unsub: (() => void) | undefined;
     const checkConn = async () => {
       const { onAuthStateChanged } = await import('firebase/auth');
-      onAuthStateChanged(StorageService.auth, (user) => {
-        setDbConnected(!!user);
+      unsub = onAuthStateChanged(StorageService.auth, (user) => {
+        if (!SupabaseService.isConfigured()) {
+          setDbConnected(!!user && !StorageService.isQuotaExceeded());
+        }
       });
     };
     checkConn();
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   // Handle switching users / roles
@@ -219,6 +273,13 @@ export function App() {
       // Persist locally
       StorageService.setCurrentUser(updatedUser);
       setCurrentUser(updatedUser);
+
+      // Chuyển hướng tab tương ứng ngay lập tức theo phân quyền
+      if (updatedUser.role === 'student') {
+        setActiveTab('exams');
+      } else if (updatedUser.role === 'admin' || updatedUser.role === 'teacher') {
+        setActiveTab('admin_portal');
+      }
       
       // Sync with Firestore (Background)
       try {
@@ -261,13 +322,55 @@ export function App() {
     try {
       const ok = await StorageService.importBackup(json);
       if (ok) {
+        setNews(StorageService.getCachedNews());
+        setMaterials(StorageService.getCachedMaterials());
+        setExams(StorageService.getCachedExams());
+        setQuestions(StorageService.getCachedQuestions());
+        setAttempts(StorageService.getCachedAttempts());
+        setAvailableUsers(StorageService.getCachedUsers());
         await reloadAllData();
-        alert('Nhập dữ liệu sao lưu thành công lên hệ thống đám mây!');
+        showToast('Nhập dữ liệu sao lưu thành công!', 'success');
       } else {
-        alert('File dữ liệu không hợp lệ hoặc không đúng định dạng.');
+        showToast('File dữ liệu không hợp lệ hoặc không đúng định dạng.', 'info');
       }
     } catch (err: any) {
-      alert('Lỗi nhập dữ liệu: ' + (err?.message || String(err)));
+      showToast('Lỗi nhập dữ liệu: ' + (err?.message || String(err)), 'info');
+    }
+  };
+
+  const handleBackupToDrive = async () => {
+    try {
+      showToast('Đang kết nối & sao lưu toàn bộ dữ liệu lên Google Drive...', 'info');
+      const json = JSON.stringify(StorageService.getDatabasePayload(), null, 2);
+      const { GoogleDriveService } = await import('./services/googleDriveService');
+      const res = await GoogleDriveService.backupAllDataToDrive(json);
+      showToast(`Đã sao lưu toàn bộ website lên Google Drive (${res.fileName})!`, 'success');
+    } catch (err: any) {
+      showToast('Lỗi sao lưu Google Drive: ' + (err?.message || String(err)), 'info');
+    }
+  };
+
+  const handleRestoreFromDrive = async () => {
+    try {
+      showToast('Đang tải bản sao lưu từ Google Drive...', 'info');
+      const { GoogleDriveService } = await import('./services/googleDriveService');
+      const { jsonContent, fileName } = await GoogleDriveService.restoreAllDataFromDrive();
+      const ok = await StorageService.importBackup(jsonContent);
+      if (ok) {
+        setNews(StorageService.getCachedNews());
+        setMaterials(StorageService.getCachedMaterials());
+        setExams(StorageService.getCachedExams());
+        setQuestions(StorageService.getCachedQuestions());
+        setAttempts(StorageService.getCachedAttempts());
+        setAvailableUsers(StorageService.getCachedUsers());
+        const { getCachedLessons } = await import('./services/lessonService');
+        setLessons(getCachedLessons());
+        showToast(`Đã khôi phục toàn bộ dữ liệu từ Google Drive (${fileName})!`, 'success');
+      } else {
+        showToast('Tệp sao lưu trên Google Drive không đúng định dạng.', 'info');
+      }
+    } catch (err: any) {
+      showToast('Lỗi khôi phục từ Google Drive: ' + (err?.message || String(err)), 'info');
     }
   };
 
@@ -628,7 +731,9 @@ export function App() {
         onResetData={handleResetData}
         onExportData={handleExportData}
         onImportData={handleImportData}
-        onOpenCloudflareSync={() => setIsCloudflareModalOpen(true)}
+        onBackupToDrive={handleBackupToDrive}
+        onRestoreFromDrive={handleRestoreFromDrive}
+        onOpenSupabaseSync={() => setIsSupabaseModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenChangePasswordModal={() => setIsChangePasswordModalOpen(true)}
         onLogout={handleLogout}
@@ -844,6 +949,19 @@ export function App() {
           )
         )}
 
+        {/* PHÂN HỆ QUẢN TRỊ: Ngân Hàng Câu Hỏi */}
+        {activeTab === 'question_bank' && (currentUser.role === 'admin' || currentUser.role === 'teacher') && (
+          <QuestionBankManager
+            questions={questions}
+            currentUser={currentUser}
+            onAddQuestion={() => setEditingQuestion(null)}
+            onEditQuestion={(q) => setEditingQuestion(q)}
+            onDeleteQuestion={handleDeleteQuestion}
+            onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
+            onDuplicateQuestion={handleDuplicateQuestion}
+          />
+        )}
+
         {/* Hồ Sơ Cá Nhân */}
         {activeTab === 'profile' && (
           <StudentDashboard
@@ -956,10 +1074,10 @@ export function App() {
         />
       )}
 
-      {/* MODAL 7: Cloudflare KV Cloud Database Sync & Config */}
-      <CloudflareSyncModal
-        isOpen={isCloudflareModalOpen}
-        onClose={() => setIsCloudflareModalOpen(false)}
+      {/* MODAL 7: Supabase PostgreSQL Database Sync & Config */}
+      <SupabaseSyncModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
         onDataChanged={reloadAllData}
       />
 

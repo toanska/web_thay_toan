@@ -198,12 +198,11 @@ export interface NotificationItem {
 
 export type AppNotification = NotificationItem;
 
-export interface CloudflareConfig {
-  workerUrl: string;
-  apiSecret?: string;
+export interface SupabaseConfig {
+  projectUrl: string;
+  anonKey: string;
   enabled: boolean;
   autoSync: boolean;
-  autoSyncIntervalSeconds?: number; // e.g. 20s
   lastSyncedAt?: string;
   status: 'idle' | 'syncing' | 'connected' | 'error';
   lastError?: string;

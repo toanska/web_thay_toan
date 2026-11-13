@@ -10,23 +10,69 @@ import {
 import { db, auth } from '../firebase';
 import { 
   doc, 
-  getDoc, 
   setDoc, 
   deleteDoc, 
   collection, 
   getDocs, 
   query, 
-  where,
   orderBy,
   onSnapshot
 } from 'firebase/firestore';
 import { optimizeMaterialPayload, optimizeQuestionPayload, optimizeUserPayload } from '../utils/dataCompressor';
+import { 
+  INITIAL_USERS, 
+  INITIAL_QUESTIONS, 
+  INITIAL_EXAMS, 
+  INITIAL_NEWS, 
+  INITIAL_MATERIALS,
+  INITIAL_NOTIFICATIONS
+} from '../data/mockData';
+import { getCachedLessons, getPublicLessons, importLessonsBackup, Lesson, LESSONS_CACHE_KEY } from './lessonService';
+import { SupabaseService } from './supabaseService';
 
 // Constants
 export const DEFAULT_SITE_LOGO = '/assets/aistudio/LOGO_WEB_05e2bec9.jpg';
 export const PROTECTED_ADMIN_ID = 'admin-protected';
+const SYNC_TS_KEY = 'thcs_last_cloud_sync_ts_v2';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút: tránh đọc lại toàn bộ Firestore mỗi lần F5
 
-// Error handling helper
+const CACHE_KEYS = {
+  users: 'thcs_cache_users_v2',
+  questions: 'thcs_cache_questions_v2',
+  exams: 'thcs_cache_exams_v2',
+  attempts: 'thcs_cache_attempts_v2',
+  news: 'thcs_cache_news_v2',
+  materials: 'thcs_cache_materials_v2',
+  notifications: 'thcs_cache_notifications_v2',
+};
+
+let firestoreQuotaExceeded = false;
+
+function readCache<T>(key: string, fallback: T): T {
+  if (typeof localStorage === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(fallback) && (!Array.isArray(parsed) || parsed.length === 0)) {
+      return fallback;
+    }
+    return parsed as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeCache<T>(key: string, data: T): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.warn(`Không thể ghi cache cục bộ (${key}):`, e);
+  }
+}
+
+// Error handling helper (logs cleanly without crashing app state)
 enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -36,25 +82,12 @@ enum OperationType {
   WRITE = 'write',
 }
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: any;
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+function logFirestoreWarning(error: unknown, operationType: OperationType, path: string | null) {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  if (errMsg.toLowerCase().includes('resource-exhausted') || errMsg.toLowerCase().includes('quota')) {
+    firestoreQuotaExceeded = true;
+  }
+  console.warn(`[Firestore Fallback] ${operationType} (${path}): ${errMsg}`);
 }
 
 /**
@@ -82,32 +115,224 @@ export function cleanForFirestore<T>(data: T): any {
   return data;
 }
 
-// Memory cache for quick synchronous access if needed, 
-// though async is preferred for Firebase
+// Helper sanitizers to ensure 'Ban Giám Hiệu' is replaced with 'Thầy Toàn' everywhere
+function sanitizeUser(u: User): User {
+  if (!u) return u;
+  if (u.name === 'Ban Giám Hiệu' || u.name === 'Ban Giám hiệu' || u.name === 'Quản Trị Viên Hệ Thống') {
+    return { ...u, name: 'Thầy Toàn' };
+  }
+  return u;
+}
+
+function mergeBuiltInUsers(users: User[]): User[] {
+  const sanitized = users.map(sanitizeUser);
+  const byId = new Map<string, User>();
+  sanitized.forEach(u => {
+    if (u && u.id) byId.set(u.id, u);
+  });
+  // Ensure core built-in accounts (Admin & Teacher Toan) are always available for login
+  INITIAL_USERS.forEach(seedUser => {
+    if (!byId.has(seedUser.id)) {
+      const existsByCode = sanitized.some(u => u.code?.toUpperCase() === seedUser.code?.toUpperCase());
+      if (!existsByCode) {
+        byId.set(seedUser.id, sanitizeUser(seedUser));
+      }
+    }
+  });
+  return Array.from(byId.values());
+}
+
+function sanitizeNews(n: NewsArticle): NewsArticle {
+  if (!n) return n;
+  let changed = false;
+  const updated = { ...n };
+  if (updated.authorName === 'Ban Giám Hiệu' || updated.authorName === 'Ban Giám hiệu') {
+    updated.authorName = 'Thầy Toàn';
+    changed = true;
+  }
+  if (updated.authorTitle === 'Ban Giám Hiệu' || updated.authorTitle === 'Ban Giám hiệu' || updated.authorTitle === 'Hiệu trưởng') {
+    updated.authorTitle = 'Quản trị viên';
+    changed = true;
+  }
+  if (updated.summary && (updated.summary.includes('Ban Giám Hiệu') || updated.summary.includes('Ban Giám hiệu'))) {
+    updated.summary = updated.summary.replace(/Ban Giám [Hh]iệu/g, 'Thầy Toàn');
+    changed = true;
+  }
+  return changed ? updated : n;
+}
+
+function sanitizeNotification(item: NotificationItem): NotificationItem {
+  if (!item) return item;
+  if (item.message && (item.message.includes('Ban Giám Hiệu') || item.message.includes('Ban Giám hiệu'))) {
+    return { ...item, message: item.message.replace(/Ban Giám [Hh]iệu/g, 'Thầy Toàn') };
+  }
+  return item;
+}
+
+// Memory cache for quick synchronous access if needed
 let currentUserCache: User | null = null;
 
 export const StorageService = {
   auth,
+
+  // Synchronous cached getters for instant UI hydration (0ms startup, offline/quota resilient)
+  getCachedUsers(): User[] {
+    return mergeBuiltInUsers(readCache<User[]>(CACHE_KEYS.users, INITIAL_USERS));
+  },
+  getCachedQuestions(): Question[] {
+    return readCache<Question[]>(CACHE_KEYS.questions, INITIAL_QUESTIONS);
+  },
+  getCachedExams(): Exam[] {
+    return readCache<Exam[]>(CACHE_KEYS.exams, INITIAL_EXAMS);
+  },
+  getCachedAttempts(): ExamAttempt[] {
+    return readCache<ExamAttempt[]>(CACHE_KEYS.attempts, []);
+  },
+  getCachedNews(): NewsArticle[] {
+    return readCache<NewsArticle[]>(CACHE_KEYS.news, INITIAL_NEWS).map(sanitizeNews);
+  },
+  getCachedMaterials(): LessonMaterial[] {
+    return readCache<LessonMaterial[]>(CACHE_KEYS.materials, INITIAL_MATERIALS);
+  },
+  getCachedNotifications(): NotificationItem[] {
+    return readCache<NotificationItem[]>(CACHE_KEYS.notifications, INITIAL_NOTIFICATIONS).map(sanitizeNotification);
+  },
+  isQuotaExceeded(): boolean {
+    return firestoreQuotaExceeded;
+  },
+  isSyncFresh(): boolean {
+    if (typeof localStorage === 'undefined') return false;
+    const raw = localStorage.getItem(SYNC_TS_KEY);
+    if (!raw) return false;
+    const ts = Number(raw);
+    return Number.isFinite(ts) && Date.now() - ts < CACHE_TTL_MS;
+  },
+  markSyncFresh(): void {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(SYNC_TS_KEY, String(Date.now()));
+      } catch {
+        // ignore
+      }
+    }
+  },
+
+  // --- Single-shot Parallel Sync from Supabase (PostgreSQL) ---
+  async syncAllFromSupabase(): Promise<{
+    users: User[];
+    questions: Question[];
+    exams: Exam[];
+    attempts: ExamAttempt[];
+    news: NewsArticle[];
+    materials: LessonMaterial[];
+    notifications: NotificationItem[];
+    lessons: Lesson[];
+  } | null> {
+    if (!SupabaseService.isConfigured()) return null;
+    try {
+      const remote = await SupabaseService.fetchDatabase();
+      if (!remote) return null;
+
+      const isRemotePopulated = Array.isArray(remote.users) && remote.users.length > 0;
+
+      const users = mergeBuiltInUsers(
+        isRemotePopulated ? remote.users : this.getCachedUsers()
+      );
+      const questions =
+        isRemotePopulated || (Array.isArray(remote.questions) && remote.questions.length > 0)
+          ? remote.questions
+          : this.getCachedQuestions();
+      const exams =
+        isRemotePopulated || (Array.isArray(remote.exams) && remote.exams.length > 0)
+          ? remote.exams
+          : this.getCachedExams();
+      const attempts =
+        isRemotePopulated || (Array.isArray(remote.attempts) && remote.attempts.length > 0)
+          ? remote.attempts
+          : this.getCachedAttempts();
+      const news = (
+        isRemotePopulated || (Array.isArray(remote.news) && remote.news.length > 0)
+          ? remote.news
+          : this.getCachedNews()
+      ).map(sanitizeNews);
+      const materials =
+        isRemotePopulated || (Array.isArray(remote.materials) && remote.materials.length > 0)
+          ? remote.materials
+          : this.getCachedMaterials();
+      const notifications = (
+        Array.isArray(remote.notifications) && remote.notifications.length > 0
+          ? remote.notifications
+          : this.getCachedNotifications()
+      ).map(sanitizeNotification);
+      const lessons =
+        isRemotePopulated || (Array.isArray(remote.lessons) && remote.lessons.length > 0)
+          ? remote.lessons
+          : getCachedLessons();
+
+      writeCache(CACHE_KEYS.users, users);
+      writeCache(CACHE_KEYS.questions, questions);
+      writeCache(CACHE_KEYS.exams, exams);
+      writeCache(CACHE_KEYS.attempts, attempts);
+      writeCache(CACHE_KEYS.news, news);
+      writeCache(CACHE_KEYS.materials, materials);
+      writeCache(CACHE_KEYS.notifications, notifications);
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(lessons));
+        } catch {
+          // ignore
+        }
+      }
+
+      firestoreQuotaExceeded = false;
+      this.markSyncFresh();
+      return { users, questions, exams, attempts, news, materials, notifications, lessons };
+    } catch (err) {
+      console.warn('[Supabase Fallback] syncAllFromSupabase failed:', err);
+      return null;
+    }
+  },
+
   // --- Users ---
   async getUsers(): Promise<User[]> {
+    if (SupabaseService.isConfigured()) {
+      try {
+        const fetched = (await SupabaseService.getCollection<User>('users')).map(sanitizeUser);
+        const merged = mergeBuiltInUsers(fetched.length > 0 ? fetched : readCache<User[]>(CACHE_KEYS.users, INITIAL_USERS));
+        writeCache(CACHE_KEYS.users, merged);
+        return merged;
+      } catch (error) {
+        console.warn('[Supabase Fallback] users:', error);
+        return this.getCachedUsers();
+      }
+    }
     try {
       const snapshot = await getDocs(collection(db, 'users'));
-      return snapshot.docs.map(doc => doc.data() as User);
+      const fetched = snapshot.docs.map(docSnap => sanitizeUser(docSnap.data() as User));
+      const merged = mergeBuiltInUsers(fetched.length > 0 ? fetched : readCache<User[]>(CACHE_KEYS.users, INITIAL_USERS));
+      writeCache(CACHE_KEYS.users, merged);
+      return merged;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'users');
-      return [];
+      logFirestoreWarning(error, OperationType.LIST, 'users');
+      return this.getCachedUsers();
     }
   },
 
   getCurrentUser(): User {
-    // Fallback to local storage for the *current* session user if not in memory
-    if (currentUserCache) return currentUserCache;
+    if (currentUserCache) return sanitizeUser(currentUserCache);
     const stored = localStorage.getItem('thcs_current_user_v1');
     if (stored) {
-      currentUserCache = JSON.parse(stored);
-      return currentUserCache!;
+      try {
+        currentUserCache = sanitizeUser(JSON.parse(stored));
+        if (currentUserCache.name === 'Ban Giám Hiệu' || currentUserCache.name === 'Ban Giám hiệu' || currentUserCache.name === 'Quản Trị Viên Hệ Thống') {
+          currentUserCache.name = 'Thầy Toàn';
+          localStorage.setItem('thcs_current_user_v1', JSON.stringify(currentUserCache));
+        }
+        return currentUserCache;
+      } catch {
+        // Fallback below
+      }
     }
-    // Default guest
     return {
       id: 'user-guest',
       name: 'Khách truy cập',
@@ -120,22 +345,23 @@ export const StorageService = {
   },
 
   setCurrentUser(user: User): void {
-    currentUserCache = user;
-    localStorage.setItem('thcs_current_user_v1', JSON.stringify(user));
+    const cleanUser = sanitizeUser(user);
+    currentUserCache = cleanUser;
+    localStorage.setItem('thcs_current_user_v1', JSON.stringify(cleanUser));
   },
 
   async loginUser(user: User): Promise<User> {
-    const updatedUser: User = {
+    const updatedUser: User = sanitizeUser({
       ...user,
       lastLoginAt: new Date().toISOString(),
       lastLoginDevice: typeof navigator !== 'undefined' ? navigator.userAgent : 'Thiết bị Web'
-    };
+    });
+    this.setCurrentUser(updatedUser);
     try {
       await this.saveUser(updatedUser);
     } catch (e) {
       console.warn('Could not save login timestamp to Firestore, continuing with local login.', e);
     }
-    this.setCurrentUser(updatedUser);
     return updatedUser;
   },
 
@@ -146,38 +372,71 @@ export const StorageService = {
     news: NewsArticle[], 
     materials: LessonMaterial[] 
   }): Promise<void> {
-    const seedIfNeeded = async () => {
+    // Seed local cache immediately if empty so app is 100% usable even offline or when Firestore quota is hit
+    if (typeof localStorage !== 'undefined') {
+      if (!localStorage.getItem(CACHE_KEYS.users)) writeCache(CACHE_KEYS.users, mergeBuiltInUsers(initialData.users));
+      if (!localStorage.getItem(CACHE_KEYS.questions)) writeCache(CACHE_KEYS.questions, initialData.questions);
+      if (!localStorage.getItem(CACHE_KEYS.exams)) writeCache(CACHE_KEYS.exams, initialData.exams);
+      if (!localStorage.getItem(CACHE_KEYS.news)) writeCache(CACHE_KEYS.news, initialData.news.map(sanitizeNews));
+      if (!localStorage.getItem(CACHE_KEYS.materials)) writeCache(CACHE_KEYS.materials, initialData.materials);
+    }
+
+    // If Supabase PostgreSQL is active, seed Supabase once if empty and skip Firestore
+    if (SupabaseService.isConfigured()) {
       try {
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        if (usersSnapshot.empty) {
-          console.log('Chưa có dữ liệu trên Firestore, đang tiến hành khởi tạo ban đầu...');
-          await Promise.all([
-            ...initialData.users.map(u => setDoc(doc(db, 'users', u.id), cleanForFirestore(u))),
-            ...initialData.questions.map(q => setDoc(doc(db, 'questions', q.id), cleanForFirestore(q))),
-            ...initialData.exams.map(e => setDoc(doc(db, 'exams', e.id), cleanForFirestore(e))),
-            ...initialData.news.map(n => setDoc(doc(db, 'news', n.id), cleanForFirestore(n))),
-            ...initialData.materials.map(m => setDoc(doc(db, 'materials', m.id), cleanForFirestore(m)))
-          ]);
-          console.log('Khởi tạo dữ liệu ban đầu lên Firestore thành công!');
+        const existingUsers = await SupabaseService.getCollection<User>('users');
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('thcs_firestore_init_checked', '1');
+        }
+        if (existingUsers.length === 0) {
+          await SupabaseService.pushDatabase({
+            users: mergeBuiltInUsers(initialData.users),
+            questions: initialData.questions,
+            exams: initialData.exams,
+            news: initialData.news.map(sanitizeNews),
+            materials: initialData.materials
+          });
         }
       } catch (err) {
-        console.warn('Không thể kiểm tra/khởi tạo dữ liệu tự động:', err);
+        console.warn('[Supabase] Seed check warning:', err);
       }
-    };
+      return;
+    }
+
+    // Only attempt Firestore seed check once per session to conserve daily Firestore read quota
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('thcs_firestore_init_checked') === '1') {
+      return;
+    }
 
     // Attempt anonymous sign-in if enabled, but don't block DB check
     try {
       const { signInAnonymously } = await import('firebase/auth');
       if (!auth.currentUser) {
-        signInAnonymously(auth).catch(() => {
-          // Anonymous auth not enabled or restricted; continue unauthenticated since rules allow read/write
-        });
+        signInAnonymously(auth).catch(() => {});
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
 
-    await seedIfNeeded();
+    try {
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('thcs_firestore_init_checked', '1');
+      }
+      if (usersSnapshot.empty) {
+        console.log('Chưa có dữ liệu trên Firestore, đang tiến hành khởi tạo ban đầu...');
+        await Promise.all([
+          ...initialData.users.map(u => setDoc(doc(db, 'users', u.id), cleanForFirestore(sanitizeUser(u)))),
+          ...initialData.questions.map(q => setDoc(doc(db, 'questions', q.id), cleanForFirestore(q))),
+          ...initialData.exams.map(e => setDoc(doc(db, 'exams', e.id), cleanForFirestore(e))),
+          ...initialData.news.map(n => setDoc(doc(db, 'news', n.id), cleanForFirestore(sanitizeNews(n)))),
+          ...initialData.materials.map(m => setDoc(doc(db, 'materials', m.id), cleanForFirestore(m)))
+        ]);
+        console.log('Khởi tạo dữ liệu ban đầu lên Firestore thành công!');
+      }
+    } catch (err) {
+      logFirestoreWarning(err, OperationType.LIST, 'initialize');
+    }
   },
 
   logoutUser(): void {
@@ -186,15 +445,28 @@ export const StorageService = {
   },
 
   async saveUser(user: User): Promise<User> {
+    const optimized = await optimizeUserPayload(sanitizeUser(user));
+    const currentList = this.getCachedUsers();
+    const idx = currentList.findIndex(u => u.id === optimized.id);
+    const nextList = idx >= 0 ? currentList.map(u => (u.id === optimized.id ? optimized : u)) : [optimized, ...currentList];
+    writeCache(CACHE_KEYS.users, nextList);
+
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.upsertItem('users', optimized);
+      } catch (error) {
+        console.warn('[Supabase] saveUser fallback:', error);
+      }
+      return optimized;
+    }
+
     try {
-      const optimized = await optimizeUserPayload(user);
       const sanitized = cleanForFirestore(optimized);
       await setDoc(doc(db, 'users', user.id), sanitized);
-      return optimized;
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
-      return user;
+      logFirestoreWarning(error, OperationType.WRITE, `users/${user.id}`);
     }
+    return optimized;
   },
 
   async deleteUser(id: string): Promise<void> {
@@ -202,150 +474,330 @@ export const StorageService = {
       console.warn('Cannot delete protected admin user');
       return;
     }
+    const nextList = this.getCachedUsers().filter(u => u.id !== id);
+    writeCache(CACHE_KEYS.users, nextList);
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.deleteItem('users', id);
+      } catch (error) {
+        console.warn('[Supabase] deleteUser fallback:', error);
+      }
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'users', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      logFirestoreWarning(error, OperationType.DELETE, `users/${id}`);
     }
   },
 
   // --- Questions ---
   async getQuestions(): Promise<Question[]> {
+    if (SupabaseService.isConfigured()) {
+      try {
+        const fetched = await SupabaseService.getCollection<Question>('questions');
+        const data = fetched.length > 0 ? fetched : this.getCachedQuestions();
+        writeCache(CACHE_KEYS.questions, data);
+        return data;
+      } catch (error) {
+        console.warn('[Supabase Fallback] questions:', error);
+        return this.getCachedQuestions();
+      }
+    }
     try {
       const snapshot = await getDocs(collection(db, 'questions'));
-      return snapshot.docs.map(doc => doc.data() as Question);
+      const fetched = snapshot.docs.map(docSnap => docSnap.data() as Question);
+      const data = fetched.length > 0 ? fetched : this.getCachedQuestions();
+      writeCache(CACHE_KEYS.questions, data);
+      return data;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'questions');
-      return [];
+      logFirestoreWarning(error, OperationType.LIST, 'questions');
+      return this.getCachedQuestions();
     }
   },
 
   async saveQuestion(question: Question): Promise<Question> {
+    const optimized = optimizeQuestionPayload(question);
+    const currentList = this.getCachedQuestions();
+    const idx = currentList.findIndex(q => q.id === optimized.id);
+    const nextList = idx >= 0 ? currentList.map(q => (q.id === optimized.id ? optimized : q)) : [optimized, ...currentList];
+    writeCache(CACHE_KEYS.questions, nextList);
+
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.upsertItem('questions', optimized);
+      } catch (error) {
+        console.warn('[Supabase] saveQuestion fallback:', error);
+      }
+      return optimized;
+    }
+
     try {
-      const optimized = optimizeQuestionPayload(question);
       const sanitized = cleanForFirestore(optimized);
       await setDoc(doc(db, 'questions', question.id), sanitized);
-      return optimized;
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `questions/${question.id}`);
-      return question;
+      logFirestoreWarning(error, OperationType.WRITE, `questions/${question.id}`);
     }
+    return optimized;
   },
 
   async deleteQuestion(id: string): Promise<void> {
+    writeCache(CACHE_KEYS.questions, this.getCachedQuestions().filter(q => q.id !== id));
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.deleteItem('questions', id);
+      } catch (error) {
+        console.warn('[Supabase] deleteQuestion fallback:', error);
+      }
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'questions', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `questions/${id}`);
+      logFirestoreWarning(error, OperationType.DELETE, `questions/${id}`);
     }
   },
 
   // --- Exams ---
   async getExams(): Promise<Exam[]> {
+    if (SupabaseService.isConfigured()) {
+      try {
+        const fetched = await SupabaseService.getCollection<Exam>('exams');
+        const data = fetched.length > 0 ? fetched : this.getCachedExams();
+        writeCache(CACHE_KEYS.exams, data);
+        return data;
+      } catch (error) {
+        console.warn('[Supabase Fallback] exams:', error);
+        return this.getCachedExams();
+      }
+    }
     try {
       const snapshot = await getDocs(collection(db, 'exams'));
-      return snapshot.docs.map(doc => doc.data() as Exam);
+      const fetched = snapshot.docs.map(docSnap => docSnap.data() as Exam);
+      const data = fetched.length > 0 ? fetched : this.getCachedExams();
+      writeCache(CACHE_KEYS.exams, data);
+      return data;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'exams');
-      return [];
+      logFirestoreWarning(error, OperationType.LIST, 'exams');
+      return this.getCachedExams();
     }
   },
 
   async saveExam(exam: Exam): Promise<Exam> {
+    const currentList = this.getCachedExams();
+    const idx = currentList.findIndex(e => e.id === exam.id);
+    const nextList = idx >= 0 ? currentList.map(e => (e.id === exam.id ? exam : e)) : [exam, ...currentList];
+    writeCache(CACHE_KEYS.exams, nextList);
+
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.upsertItem('exams', exam);
+      } catch (error) {
+        console.warn('[Supabase] saveExam fallback:', error);
+      }
+      return exam;
+    }
+
     try {
       const sanitized = cleanForFirestore(exam);
       await setDoc(doc(db, 'exams', exam.id), sanitized);
-      return exam;
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `exams/${exam.id}`);
-      return exam;
+      logFirestoreWarning(error, OperationType.WRITE, `exams/${exam.id}`);
     }
+    return exam;
   },
 
   async deleteExam(id: string): Promise<void> {
+    writeCache(CACHE_KEYS.exams, this.getCachedExams().filter(e => e.id !== id));
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.deleteItem('exams', id);
+      } catch (error) {
+        console.warn('[Supabase] deleteExam fallback:', error);
+      }
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'exams', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `exams/${id}`);
+      logFirestoreWarning(error, OperationType.DELETE, `exams/${id}`);
     }
   },
 
   // --- Attempts ---
   async getAttempts(): Promise<ExamAttempt[]> {
+    if (SupabaseService.isConfigured()) {
+      try {
+        const fetched = await SupabaseService.getCollection<ExamAttempt>('attempts');
+        writeCache(CACHE_KEYS.attempts, fetched);
+        return fetched;
+      } catch (error) {
+        console.warn('[Supabase Fallback] attempts:', error);
+        return this.getCachedAttempts();
+      }
+    }
     try {
       const snapshot = await getDocs(query(collection(db, 'attempts'), orderBy('submittedAt', 'desc')));
-      return snapshot.docs.map(doc => doc.data() as ExamAttempt);
+      const fetched = snapshot.docs.map(docSnap => docSnap.data() as ExamAttempt);
+      writeCache(CACHE_KEYS.attempts, fetched);
+      return fetched;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'attempts');
-      return [];
+      logFirestoreWarning(error, OperationType.LIST, 'attempts');
+      return this.getCachedAttempts();
     }
   },
 
   async saveAttempt(attempt: ExamAttempt): Promise<ExamAttempt> {
+    const currentList = this.getCachedAttempts();
+    const idx = currentList.findIndex(a => a.id === attempt.id);
+    const nextList = idx >= 0 ? currentList.map(a => (a.id === attempt.id ? attempt : a)) : [attempt, ...currentList];
+    writeCache(CACHE_KEYS.attempts, nextList);
+
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.upsertItem('attempts', attempt);
+      } catch (error) {
+        console.warn('[Supabase] saveAttempt fallback:', error);
+      }
+      return attempt;
+    }
+
     try {
       const sanitized = cleanForFirestore(attempt);
       await setDoc(doc(db, 'attempts', attempt.id), sanitized);
-      return attempt;
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `attempts/${attempt.id}`);
-      return attempt;
+      logFirestoreWarning(error, OperationType.WRITE, `attempts/${attempt.id}`);
     }
+    return attempt;
   },
 
   async deleteAttempt(id: string): Promise<void> {
+    writeCache(CACHE_KEYS.attempts, this.getCachedAttempts().filter(a => a.id !== id));
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.deleteItem('attempts', id);
+      } catch (error) {
+        console.warn('[Supabase] deleteAttempt fallback:', error);
+      }
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'attempts', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `attempts/${id}`);
+      logFirestoreWarning(error, OperationType.DELETE, `attempts/${id}`);
     }
   },
 
   // --- News ---
   async getNews(): Promise<NewsArticle[]> {
+    if (SupabaseService.isConfigured()) {
+      try {
+        const fetched = (await SupabaseService.getCollection<NewsArticle>('news')).map(sanitizeNews);
+        const data = fetched.length > 0 ? fetched : this.getCachedNews();
+        writeCache(CACHE_KEYS.news, data);
+        return data;
+      } catch (error) {
+        console.warn('[Supabase Fallback] news:', error);
+        return this.getCachedNews();
+      }
+    }
     try {
       const snapshot = await getDocs(query(collection(db, 'news'), orderBy('publishedAt', 'desc')));
-      return snapshot.docs.map(doc => doc.data() as NewsArticle);
+      const fetched = snapshot.docs.map(docSnap => sanitizeNews(docSnap.data() as NewsArticle));
+      const data = fetched.length > 0 ? fetched : this.getCachedNews();
+      writeCache(CACHE_KEYS.news, data);
+      return data;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'news');
-      return [];
+      logFirestoreWarning(error, OperationType.LIST, 'news');
+      return this.getCachedNews();
     }
   },
 
   async saveNews(article: NewsArticle): Promise<NewsArticle> {
-    try {
-      const sanitized = cleanForFirestore(article);
-      await setDoc(doc(db, 'news', article.id), sanitized);
-      return article;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `news/${article.id}`);
-      return article;
+    const cleanArticle = sanitizeNews(article);
+    const currentList = this.getCachedNews();
+    const idx = currentList.findIndex(n => n.id === cleanArticle.id);
+    const nextList = idx >= 0 ? currentList.map(n => (n.id === cleanArticle.id ? cleanArticle : n)) : [cleanArticle, ...currentList];
+    writeCache(CACHE_KEYS.news, nextList);
+
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.upsertItem('news', cleanArticle);
+      } catch (error) {
+        console.warn('[Supabase] saveNews fallback:', error);
+      }
+      return cleanArticle;
     }
+
+    try {
+      const sanitized = cleanForFirestore(cleanArticle);
+      await setDoc(doc(db, 'news', article.id), sanitized);
+    } catch (error) {
+      logFirestoreWarning(error, OperationType.WRITE, `news/${article.id}`);
+    }
+    return cleanArticle;
   },
 
   async deleteNews(id: string): Promise<void> {
+    writeCache(CACHE_KEYS.news, this.getCachedNews().filter(n => n.id !== id));
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.deleteItem('news', id);
+      } catch (error) {
+        console.warn('[Supabase] deleteNews fallback:', error);
+      }
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'news', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `news/${id}`);
+      logFirestoreWarning(error, OperationType.DELETE, `news/${id}`);
     }
   },
 
   // --- Materials ---
   async getMaterials(): Promise<LessonMaterial[]> {
+    if (SupabaseService.isConfigured()) {
+      try {
+        const fetched = await SupabaseService.getCollection<LessonMaterial>('materials');
+        const data = fetched.length > 0 ? fetched : this.getCachedMaterials();
+        writeCache(CACHE_KEYS.materials, data);
+        return data;
+      } catch (error) {
+        console.warn('[Supabase Fallback] materials:', error);
+        return this.getCachedMaterials();
+      }
+    }
     try {
       const snapshot = await getDocs(collection(db, 'materials'));
-      return snapshot.docs.map(doc => doc.data() as LessonMaterial);
+      const fetched = snapshot.docs.map(docSnap => docSnap.data() as LessonMaterial);
+      const data = fetched.length > 0 ? fetched : this.getCachedMaterials();
+      writeCache(CACHE_KEYS.materials, data);
+      return data;
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'materials');
-      return [];
+      logFirestoreWarning(error, OperationType.LIST, 'materials');
+      return this.getCachedMaterials();
     }
   },
 
   async saveMaterial(material: LessonMaterial): Promise<LessonMaterial> {
+    const optimized = optimizeMaterialPayload(material);
+    const currentList = this.getCachedMaterials();
+    const idx = currentList.findIndex(m => m.id === optimized.id);
+    const nextList = idx >= 0 ? currentList.map(m => (m.id === optimized.id ? optimized : m)) : [optimized, ...currentList];
+    writeCache(CACHE_KEYS.materials, nextList);
+
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.upsertItem('materials', optimized);
+      } catch (error) {
+        console.warn('[Supabase] saveMaterial fallback:', error);
+      }
+      return optimized;
+    }
+
     try {
-      const optimized = optimizeMaterialPayload(material);
-      let sanitized = cleanForFirestore(optimized);
-      // Safe check: Firestore has a 1MB per document limit.
+      const sanitized = cleanForFirestore(optimized);
       if (sanitized.fileUrl && typeof sanitized.fileUrl === 'string' && sanitized.fileUrl.length > 350000) {
         console.warn('Tệp có dung lượng base64 lớn (>350KB), nén/lược bỏ fileUrl khi đồng bộ Firestore để dữ liệu luôn nhẹ.');
         delete sanitized.fileUrl;
@@ -362,17 +814,26 @@ export const StorageService = {
         await setDoc(doc(db, 'materials', material.id), safePayload);
         return material;
       } catch (retryErr) {
-        handleFirestoreError(retryErr, OperationType.WRITE, `materials/${material.id}`);
+        logFirestoreWarning(retryErr, OperationType.WRITE, `materials/${material.id}`);
         return material;
       }
     }
   },
 
   async deleteMaterial(id: string): Promise<void> {
+    writeCache(CACHE_KEYS.materials, this.getCachedMaterials().filter(m => m.id !== id));
+    if (SupabaseService.isConfigured()) {
+      try {
+        await SupabaseService.deleteItem('materials', id);
+      } catch (error) {
+        console.warn('[Supabase] deleteMaterial fallback:', error);
+      }
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'materials', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `materials/${id}`);
+      logFirestoreWarning(error, OperationType.DELETE, `materials/${id}`);
     }
   },
 
@@ -391,12 +852,24 @@ export const StorageService = {
 
   // --- Notifications ---
   async getNotifications(): Promise<NotificationItem[]> {
+    if (SupabaseService.isConfigured()) {
+      try {
+        const fetched = (await SupabaseService.getCollection<NotificationItem>('notifications')).map(sanitizeNotification);
+        const data = fetched.length > 0 ? fetched : this.getCachedNotifications();
+        writeCache(CACHE_KEYS.notifications, data);
+        return data;
+      } catch {
+        return this.getCachedNotifications();
+      }
+    }
     try {
       const snapshot = await getDocs(query(collection(db, 'notifications'), orderBy('timestamp', 'desc')));
-      return snapshot.docs.map(doc => doc.data() as NotificationItem);
-    } catch (error) {
-      // Non-critical, just return empty
-      return [];
+      const fetched = snapshot.docs.map(docSnap => sanitizeNotification(docSnap.data() as NotificationItem));
+      const data = fetched.length > 0 ? fetched : this.getCachedNotifications();
+      writeCache(CACHE_KEYS.notifications, data);
+      return data;
+    } catch {
+      return this.getCachedNotifications();
     }
   },
 
@@ -411,32 +884,58 @@ export const StorageService = {
     onNotifications?: (data: NotificationItem[]) => void;
   }) {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      callbacks.onUsers?.(snap.docs.map(d => d.data() as User));
-    }, (err) => console.error('Lỗi lắng nghe users realtime:', err));
+      if (!snap.empty) {
+        const merged = mergeBuiltInUsers(snap.docs.map(d => sanitizeUser(d.data() as User)));
+        writeCache(CACHE_KEYS.users, merged);
+        callbacks.onUsers?.(merged);
+      }
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'users/realtime'));
 
     const unsubExams = onSnapshot(collection(db, 'exams'), (snap) => {
-      callbacks.onExams?.(snap.docs.map(d => d.data() as Exam));
-    }, (err) => console.error('Lỗi lắng nghe exams realtime:', err));
+      if (!snap.empty) {
+        const data = snap.docs.map(d => d.data() as Exam);
+        writeCache(CACHE_KEYS.exams, data);
+        callbacks.onExams?.(data);
+      }
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'exams/realtime'));
 
     const unsubNews = onSnapshot(query(collection(db, 'news'), orderBy('publishedAt', 'desc')), (snap) => {
-      callbacks.onNews?.(snap.docs.map(d => d.data() as NewsArticle));
-    }, (err) => console.error('Lỗi lắng nghe news realtime:', err));
+      if (!snap.empty) {
+        const data = snap.docs.map(d => sanitizeNews(d.data() as NewsArticle));
+        writeCache(CACHE_KEYS.news, data);
+        callbacks.onNews?.(data);
+      }
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'news/realtime'));
 
     const unsubMaterials = onSnapshot(collection(db, 'materials'), (snap) => {
-      callbacks.onMaterials?.(snap.docs.map(d => d.data() as LessonMaterial));
-    }, (err) => console.error('Lỗi lắng nghe materials realtime:', err));
+      if (!snap.empty) {
+        const data = snap.docs.map(d => d.data() as LessonMaterial);
+        writeCache(CACHE_KEYS.materials, data);
+        callbacks.onMaterials?.(data);
+      }
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'materials/realtime'));
 
     const unsubAttempts = onSnapshot(query(collection(db, 'attempts'), orderBy('submittedAt', 'desc')), (snap) => {
-      callbacks.onAttempts?.(snap.docs.map(d => d.data() as ExamAttempt));
-    }, (err) => console.error('Lỗi lắng nghe attempts realtime:', err));
+      const data = snap.docs.map(d => d.data() as ExamAttempt);
+      writeCache(CACHE_KEYS.attempts, data);
+      callbacks.onAttempts?.(data);
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'attempts/realtime'));
 
     const unsubQuestions = onSnapshot(collection(db, 'questions'), (snap) => {
-      callbacks.onQuestions?.(snap.docs.map(d => d.data() as Question));
-    }, (err) => console.error('Lỗi lắng nghe questions realtime:', err));
+      if (!snap.empty) {
+        const data = snap.docs.map(d => d.data() as Question);
+        writeCache(CACHE_KEYS.questions, data);
+        callbacks.onQuestions?.(data);
+      }
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'questions/realtime'));
 
     const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('timestamp', 'desc')), (snap) => {
-      callbacks.onNotifications?.(snap.docs.map(d => d.data() as NotificationItem));
-    }, (err) => console.error('Lỗi lắng nghe notifications realtime:', err));
+      if (!snap.empty) {
+        const data = snap.docs.map(d => sanitizeNotification(d.data() as NotificationItem));
+        writeCache(CACHE_KEYS.notifications, data);
+        callbacks.onNotifications?.(data);
+      }
+    }, (err) => logFirestoreWarning(err, OperationType.LIST, 'notifications/realtime'));
 
     return () => {
       unsubUsers();
@@ -449,81 +948,128 @@ export const StorageService = {
     };
   },
 
-  // Legacy stub for App.tsx compatibility during transition
   subscribeToAll(onUpdate: () => void) {
-    const unsub = onSnapshot(collection(db, 'users'), onUpdate);
+    const unsub = onSnapshot(collection(db, 'users'), onUpdate, (err) => logFirestoreWarning(err, OperationType.LIST, 'users/all'));
     return unsub;
   },
 
-  // Mock methods to satisfy previous interfaces if needed
   resetAllData() {
-    console.warn('Reset all data not supported for Firebase directly through this method.');
+    writeCache(CACHE_KEYS.users, mergeBuiltInUsers(INITIAL_USERS));
+    writeCache(CACHE_KEYS.questions, INITIAL_QUESTIONS);
+    writeCache(CACHE_KEYS.exams, INITIAL_EXAMS);
+    writeCache(CACHE_KEYS.news, INITIAL_NEWS.map(sanitizeNews));
+    writeCache(CACHE_KEYS.materials, INITIAL_MATERIALS);
+    writeCache(CACHE_KEYS.notifications, INITIAL_NOTIFICATIONS.map(sanitizeNotification));
   },
   
   async exportBackup(): Promise<string> {
     try {
-      const [users, questions, exams, news, materials, attempts] = await Promise.all([
+      const [users, questions, exams, news, materials, attempts, lessons] = await Promise.all([
         this.getUsers(),
         this.getQuestions(),
         this.getExams(),
         this.getNews(),
         this.getMaterials(),
-        this.getAttempts()
+        this.getAttempts(),
+        getPublicLessons().catch(() => getCachedLessons())
       ]);
       return JSON.stringify({
-        version: '2.0',
+        version: '2.1',
         exportedAt: new Date().toISOString(),
         users,
         questions,
         exams,
         news,
         materials,
-        attempts
+        attempts,
+        lessons
       }, null, 2);
     } catch (e) {
       console.error('Error exporting backup:', e);
-      return JSON.stringify({ error: 'Failed to export' });
+      return JSON.stringify(this.getDatabasePayload(), null, 2);
     }
   },
   
-  async importBackup(json?: string, verbose = true): Promise<boolean> {
+  async importBackup(json?: string, pushToCloud = true): Promise<boolean> {
     if (!json || !json.trim()) return false;
     try {
       const parsed = JSON.parse(json);
+      const useSupabase = SupabaseService.isConfigured();
       const promises: Promise<any>[] = [];
 
       if (Array.isArray(parsed.users)) {
-        parsed.users.forEach((u: User) => {
-          if (u.id) promises.push(setDoc(doc(db, 'users', u.id), cleanForFirestore(u)));
-        });
+        const merged = mergeBuiltInUsers(parsed.users);
+        writeCache(CACHE_KEYS.users, merged);
+        if (!useSupabase && pushToCloud) {
+          merged.forEach((u: User) => {
+            if (u.id) promises.push(setDoc(doc(db, 'users', u.id), cleanForFirestore(u)).catch(() => {}));
+          });
+        }
       }
       if (Array.isArray(parsed.questions)) {
-        parsed.questions.forEach((q: Question) => {
-          if (q.id) promises.push(setDoc(doc(db, 'questions', q.id), cleanForFirestore(q)));
-        });
+        writeCache(CACHE_KEYS.questions, parsed.questions);
+        if (!useSupabase && pushToCloud) {
+          parsed.questions.forEach((q: Question) => {
+            if (q.id) promises.push(setDoc(doc(db, 'questions', q.id), cleanForFirestore(q)).catch(() => {}));
+          });
+        }
       }
       if (Array.isArray(parsed.exams)) {
-        parsed.exams.forEach((e: Exam) => {
-          if (e.id) promises.push(setDoc(doc(db, 'exams', e.id), cleanForFirestore(e)));
-        });
+        writeCache(CACHE_KEYS.exams, parsed.exams);
+        if (!useSupabase && pushToCloud) {
+          parsed.exams.forEach((e: Exam) => {
+            if (e.id) promises.push(setDoc(doc(db, 'exams', e.id), cleanForFirestore(e)).catch(() => {}));
+          });
+        }
       }
       if (Array.isArray(parsed.news)) {
-        parsed.news.forEach((n: NewsArticle) => {
-          if (n.id) promises.push(setDoc(doc(db, 'news', n.id), cleanForFirestore(n)));
-        });
+        const cleanNews = parsed.news.map(sanitizeNews);
+        writeCache(CACHE_KEYS.news, cleanNews);
+        if (!useSupabase && pushToCloud) {
+          cleanNews.forEach((n: NewsArticle) => {
+            if (n.id) promises.push(setDoc(doc(db, 'news', n.id), cleanForFirestore(n)).catch(() => {}));
+          });
+        }
       }
       if (Array.isArray(parsed.materials)) {
-        parsed.materials.forEach((m: LessonMaterial) => {
-          if (m.id) promises.push(setDoc(doc(db, 'materials', m.id), cleanForFirestore(m)));
-        });
+        writeCache(CACHE_KEYS.materials, parsed.materials);
+        if (!useSupabase && pushToCloud) {
+          parsed.materials.forEach((m: LessonMaterial) => {
+            if (m.id) promises.push(setDoc(doc(db, 'materials', m.id), cleanForFirestore(m)).catch(() => {}));
+          });
+        }
       }
       if (Array.isArray(parsed.attempts)) {
-        parsed.attempts.forEach((a: ExamAttempt) => {
-          if (a.id) promises.push(setDoc(doc(db, 'attempts', a.id), cleanForFirestore(a)));
-        });
+        writeCache(CACHE_KEYS.attempts, parsed.attempts);
+        if (!useSupabase && pushToCloud) {
+          parsed.attempts.forEach((a: ExamAttempt) => {
+            if (a.id) promises.push(setDoc(doc(db, 'attempts', a.id), cleanForFirestore(a)).catch(() => {}));
+          });
+        }
+      }
+      if (Array.isArray(parsed.notifications)) {
+        const cleanNotifs = parsed.notifications.map(sanitizeNotification);
+        writeCache(CACHE_KEYS.notifications, cleanNotifs);
+      }
+      if (Array.isArray(parsed.lessons)) {
+        if (useSupabase && !pushToCloud && typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem(LESSONS_CACHE_KEY, JSON.stringify(parsed.lessons));
+          } catch {
+            // ignore
+          }
+        } else if (pushToCloud) {
+          promises.push(importLessonsBackup(parsed.lessons as Lesson[]).catch(() => {}));
+        }
       }
 
-      await Promise.all(promises);
+      if (useSupabase && pushToCloud) {
+        await SupabaseService.pushDatabase(this.getDatabasePayload()).catch((err) => {
+          console.warn('[Supabase] importBackup push failed:', err);
+        });
+      } else {
+        await Promise.allSettled(promises);
+      }
       return true;
     } catch (e) {
       console.error('Error importing backup:', e);
@@ -531,12 +1077,38 @@ export const StorageService = {
     }
   },
 
-  // Legacy stubs for CloudflareService compatibility
   getDatabasePayload() {
-    return {};
+    return {
+      version: '2.1',
+      exportedAt: new Date().toISOString(),
+      users: this.getCachedUsers(),
+      questions: this.getCachedQuestions(),
+      exams: this.getCachedExams(),
+      news: this.getCachedNews(),
+      materials: this.getCachedMaterials(),
+      attempts: this.getCachedAttempts(),
+      notifications: this.getCachedNotifications(),
+      lessons: getCachedLessons(),
+    };
   },
 
   smartMergeBackup(data: any) {
-    return { updated: false, newAttemptsCount: 0 };
+    if (!data || typeof data !== 'object') {
+      return { updated: false, newAttemptsCount: 0 };
+    }
+    let updated = false;
+    let newAttemptsCount = 0;
+
+    if (Array.isArray(data.attempts)) {
+      const existing = this.getCachedAttempts();
+      const ids = new Set(existing.map(a => a.id));
+      const added = data.attempts.filter((a: ExamAttempt) => a?.id && !ids.has(a.id));
+      if (added.length > 0) {
+        writeCache(CACHE_KEYS.attempts, [...added, ...existing]);
+        updated = true;
+        newAttemptsCount = added.length;
+      }
+    }
+    return { updated, newAttemptsCount };
   }
 };

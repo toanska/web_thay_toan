@@ -708,7 +708,7 @@ export const ExamTaking: React.FC<ExamTakingProps> = ({
               </p>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Quy chế thi trực tuyến THCS nghiêm cấm thí sinh chuyển tab hoặc mở ứng dụng tra cứu khác. Số lần chuyển tab sẽ được gửi trực tiếp vào báo cáo kết quả của Ban Giám Hiệu.
+              Quy chế thi trực tuyến THCS nghiêm cấm thí sinh chuyển tab hoặc mở ứng dụng tra cứu khác. Số lần chuyển tab sẽ được gửi trực tiếp vào báo cáo kết quả của Thầy Toàn.
             </p>
             <button
               onClick={() => setShowCheatWarning(false)}

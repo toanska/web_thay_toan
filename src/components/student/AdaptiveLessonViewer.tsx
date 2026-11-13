@@ -102,17 +102,78 @@ export const AdaptiveLessonViewer: React.FC<AdaptiveLessonViewerProps> = ({ less
 
               <div className="flex items-center gap-2">
                 {lesson.fileUrl.includes('drive.google.com') && (
-                  <button
-                    onClick={() => setUseProxy(!useProxy)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs border ${
-                      useProxy 
-                        ? 'bg-amber-600 text-white border-amber-700' 
-                        : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>{useProxy ? 'Dùng trình xem chuẩn' : 'Dùng trình xem dự phòng'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setUseProxy(!useProxy)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs border ${
+                        useProxy 
+                          ? 'bg-amber-600 text-white border-amber-700' 
+                          : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
+                      }`}
+                      title="Sử dụng trình xem dự phòng nếu tệp không hiển thị"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>{useProxy ? 'Dùng trình xem chuẩn' : 'Dùng trình xem dự phòng'}</span>
+                    </button>
+
+                    {/* Admin Fix Permissions Button */}
+                    {lesson.fileUrl.includes('drive.google.com') && (
+                      <button
+                        onClick={async () => {
+                          const fileId = lesson.fileUrl.includes('/file/d/') 
+                            ? lesson.fileUrl.split('/file/d/')[1].split('/')[0] 
+                            : new URL(lesson.fileUrl).searchParams.get('id');
+                          
+                          if (!fileId) {
+                            alert('Không thể xác định mã tệp Drive.');
+                            return;
+                          }
+
+                          try {
+                            const { getAccessToken } = await import('../../firebase');
+                            const token = await getAccessToken();
+                            
+                            if (!token) {
+                              alert('Vui lòng đăng nhập Google ở trang Đăng nhập trước khi thực hiện thao tác này.');
+                              return;
+                            }
+
+                            const permRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+                              method: 'POST',
+                              headers: {
+                                Authorization: `Bearer ${token}`,
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                role: 'reader',
+                                type: 'anyone',
+                                allowFileDiscovery: false,
+                              }),
+                            });
+
+                            if (!permRes.ok) {
+                              const errData = await permRes.json().catch(() => ({}));
+                              if (permRes.status === 401) {
+                                alert('Phiên đăng nhập Google đã hết hạn. Vui lòng đăng nhập lại bằng Google.');
+                              } else {
+                                alert(`Không thể sửa quyền (${permRes.status}): ${errData.error?.message || 'Tài khoản hoặc tên miền có thể đang chặn chia sẻ công khai.'}`);
+                              }
+                              return;
+                            }
+
+                            alert('Đã cập nhật quyền "Bất kỳ ai có liên kết đều có thể xem". Vui lòng tải lại trang để kiểm tra.');
+                          } catch (err: any) {
+                            alert('Lỗi khi sửa quyền: ' + err.message);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                        title="Dành cho Giáo viên: Sửa lỗi học sinh không xem được tệp"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+                        <span>Sửa quyền truy cập</span>
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 <a

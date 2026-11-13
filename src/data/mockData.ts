@@ -95,7 +95,7 @@ export const INITIAL_USERS: User[] = [
   },
   {
     id: 'user-admin-1',
-    name: 'Quản Trị Viên Hệ Thống',
+    name: 'Thầy Toàn',
     role: 'admin',
     code: 'ADMIN-TINHOC',
     pin: '123456',
@@ -500,7 +500,7 @@ export const INITIAL_NEWS: NewsArticle[] = [
     title: 'Kế hoạch tổ chức Khảo sát chất lượng Giữa Học kỳ I năm học 2026 - 2027',
     slug: 'ke-hoach-khao-sat-chat-luong-giua-ki-2',
     category: 'Thông báo chung',
-    summary: 'Ban Giám hiệu nhà trường thông báo kế hoạch chi tiết, lịch thi trực tuyến và trực tiếp cho toàn thể học sinh khối 6, 7, 8, 9.',
+    summary: 'Thầy Toàn thông báo kế hoạch chi tiết, lịch thi trực tuyến và trực tiếp cho toàn thể học sinh khối 6, 7, 8, 9.',
     content: `Trường THCS Ngô Quyền trân trọng thông báo đến toàn thể cán bộ giáo viên, phụ huynh và học sinh kế hoạch khảo sát chất lượng giữa học kỳ I năm học 2026 - 2027 như sau:
 
 1. **Mục đích:**
@@ -518,8 +518,8 @@ export const INITIAL_NEWS: NewsArticle[] = [
 Chúc các em học sinh ôn tập thật tốt và đạt kết quả cao nhất!`,
     featuredImage: 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=800&auto=format&fit=crop&q=80',
     publishedAt: '2026-02-28',
-    authorName: 'Ban Giám Hiệu',
-    authorTitle: 'Hiệu trưởng',
+    authorName: 'Thầy Toàn',
+    authorTitle: 'Quản trị viên',
     views: 1420,
     likes: 128,
     isPinned: true,
@@ -637,7 +637,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif-02',
     title: 'Thông báo khảo thí mới',
-    message: 'Ban Giám hiệu vừa ban hành kế hoạch thi Giữa học kỳ I năm học 2026-2027.',
+    message: 'Thầy Toàn vừa ban hành kế hoạch thi Giữa học kỳ I năm học 2026-2027.',
     type: 'news',
     timestamp: '2026-02-28 08:00',
     read: true,

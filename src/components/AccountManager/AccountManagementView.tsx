@@ -713,7 +713,7 @@ Bùi Thảo Nhi`
           }`}
         >
           <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>Ban Quản Trị / BGH</span>
+            <span>Ban Quản Trị / Thầy Toàn</span>
             <ShieldCheck className="w-4 h-4 text-purple-600" />
           </div>
           <p className="text-2xl font-black text-slate-900">{totalAdmins}</p>
